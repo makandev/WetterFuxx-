@@ -2,6 +2,27 @@
 
 import { t, getLang } from './i18n.js';
 
+// ---- Timezone handling -------------------------------------------------------
+// Open-Meteo returns wall-clock ISO strings without offset (timezone:auto).
+// To compare against "now" we work in a "wall-clock-as-UTC" space:
+//   parseLocal(iso)  -> epoch where the place's wall time is read as UTC
+//   placeNowMs()     -> the place's current wall time in the same space
+// Digits for display stay correct via the normal Date parsing elsewhere.
+let placeOffsetSec = null;
+export function setPlaceTz(seconds) {
+  placeOffsetSec = (typeof seconds === 'number') ? seconds : null;
+}
+export function parseLocal(iso) {
+  if (!iso) return null;
+  const hasTz = /[zZ]|[+-]\d\d:?\d\d$/.test(iso);
+  const d = new Date(hasTz ? iso : `${iso}Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+export function placeNowMs() {
+  if (placeOffsetSec == null) return Date.now();
+  return Date.now() + placeOffsetSec * 1000;
+}
+
 export function tempStr(v, unit = 'C') {
   if (v === null || v === undefined || Number.isNaN(v)) return '–';
   return `${Math.round(v)}°`;
@@ -51,6 +72,18 @@ export function fullDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString(getLang() === 'en' ? 'en-GB' : 'de-DE',
     { weekday: 'long', day: 'numeric', month: 'long' });
+}
+// Short date like "30.7." (de) or "Jul 30" (en)
+export function shortDate(iso) {
+  const d = new Date(iso);
+  if (getLang() === 'en') {
+    return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
+  }
+  return `${d.getDate()}.${d.getMonth() + 1}.`;
+}
+export function isWeekend(iso) {
+  const g = new Date(iso).getDay();
+  return g === 0 || g === 6;
 }
 
 // UV index level → {label, class, advice}

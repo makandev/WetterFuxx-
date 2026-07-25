@@ -5,11 +5,12 @@ import { searchPlaces, reversePlace, getWeather, getAlerts, getCurrentBrief } fr
 import { skyGroup } from './weathercodes.js';
 import { placeLabel } from './format.js';
 import { initEffects, setScene } from './effects.js';
-import { renderAll, renderFamily } from './ui.js';
+import { renderAll, renderFamily, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
-  placeFromParams, shareURL, samePlace,
+  placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
 } from './store.js';
+import { buildShareBlob } from './sharecard.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -25,7 +26,13 @@ async function boot() {
   wireEvents();
   renderSavedChips();
 
-  // 1) URL shared link  2) last used place  3) geolocation  4) default (Berlin)
+  // 0) shared family set  1) shared single place  2) last used  3) geolocation  4) default
+  const fam = familyFromParams(location.search);
+  if (fam && fam.length) {
+    importPlaces(fam);
+    renderSavedChips();
+    return selectPlace(fam[0], false);
+  }
   const shared = placeFromParams(location.search);
   if (shared) return selectPlace(shared, false);
 
@@ -49,7 +56,9 @@ function applyStaticText() {
 }
 
 // ---- Place selection & data loading -----------------------------------------
+let selReqId = 0;
 async function selectPlace(place, updateHistory = true) {
+  const my = ++selReqId;
   currentPlace = place;
   settings.lastPlaceId = place.id;
   saveSettings(settings);
@@ -67,11 +76,13 @@ async function selectPlace(place, updateHistory = true) {
       getWeather(place, settings.units),
       getAlerts(place.lat, place.lon),
     ]);
+    if (my !== selReqId) return; // a newer selection superseded this one
     data.officialAlerts = officialAlerts;
     currentData = data;
     const c = data.forecast.current;
     setScene(skyGroup(c.weather_code), c.is_day === 1);
     renderAll(data, settings);
+    updateThemeColor();
     hideLoading();
     refreshFamily();
   } catch (e) {
@@ -94,7 +105,9 @@ async function refreshFamily() {
 }
 function wireFamilyRows(places) {
   document.querySelectorAll('#family .fam-row').forEach((row) => {
-    row.addEventListener('click', () => selectPlace(places[+row.dataset.i]));
+    const go = () => selectPlace(places[+row.dataset.i]);
+    row.addEventListener('click', go);
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
   });
 }
 
@@ -148,9 +161,9 @@ function renderSearchResults(results) {
   if (!results.length) { box.innerHTML = `<div class="search-empty">${t('errSearch')}</div>`; return; }
   box.innerHTML = results.map((r, i) => `
     <button class="search-item" data-i="${i}">
-      <span class="si-flag">${flagEmoji(r.country_code)}</span>
-      <span class="si-main"><b>${r.name}</b><small>${[r.admin1, r.country].filter(Boolean).join(', ')}</small></span>
-      <span class="si-add">＋</span>
+      <span class="si-flag" aria-hidden="true">${flagEmoji(r.country_code)}</span>
+      <span class="si-main"><b>${escapeHtml(r.name)}</b><small>${escapeHtml([r.admin1, r.country].filter(Boolean).join(', '))}</small></span>
+      <span class="si-add" aria-hidden="true">＋</span>
     </button>`).join('');
   box.querySelectorAll('.search-item').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -171,16 +184,18 @@ function renderSavedChips() {
   if (!places.length) { wrap.innerHTML = ''; emptyEl.hidden = false; emptyEl.textContent = t('noSaved'); return; }
   emptyEl.hidden = true;
   wrap.innerHTML = places.map((p, i) => `
-    <div class="chip${currentPlace && samePlace(p, currentPlace) ? ' active' : ''}" data-i="${i}">
-      <span class="chip-flag">${flagEmoji(p.country_code)}</span>
-      <span class="chip-name">${p.name}</span>
-      <button class="chip-x" data-del="${i}" title="${t('remove')}">×</button>
+    <div class="chip${currentPlace && samePlace(p, currentPlace) ? ' active' : ''}" data-i="${i}" role="button" tabindex="0" aria-label="${escapeHtml(p.name)}">
+      <span class="chip-flag" aria-hidden="true">${flagEmoji(p.country_code)}</span>
+      <span class="chip-name">${escapeHtml(p.name)}</span>
+      <button class="chip-x" data-del="${i}" title="${t('remove')}" aria-label="${t('remove')} ${escapeHtml(p.name)}">×</button>
     </div>`).join('');
   wrap.querySelectorAll('.chip').forEach((chip) => {
-    chip.addEventListener('click', (e) => {
+    const go = (e) => {
       if (e.target.classList.contains('chip-x')) return;
       selectPlace(places[+chip.dataset.i]);
-    });
+    };
+    chip.addEventListener('click', go);
+    chip.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(e); } });
   });
   wrap.querySelectorAll('.chip-x').forEach((btn) => {
     btn.addEventListener('click', (e) => {
@@ -215,13 +230,36 @@ async function share() {
   if (!currentPlace) return;
   const url = shareURL(currentPlace);
   const text = t('shareText', { place: currentPlace.name });
+  // Try sharing a rendered weather image (best on mobile)
+  try {
+    if (currentData && navigator.canShare) {
+      const blob = await buildShareBlob(currentData, settings);
+      if (blob) {
+        const file = new File([blob], 'wetterfux.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: t('appName'), text, url });
+          return;
+        }
+      }
+    }
+  } catch { /* fall through to link sharing */ }
   if (navigator.share) {
     try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
   }
-  try {
-    await navigator.clipboard.writeText(url);
-    toast(t('copied'));
-  } catch { prompt(t('share'), url); }
+  try { await navigator.clipboard.writeText(url); toast(t('copied')); }
+  catch { prompt(t('share'), url); }
+}
+
+async function shareFamily() {
+  const places = loadPlaces();
+  if (places.length < 2) return;
+  const url = familyURL(places);
+  const text = getLang() === 'en' ? 'Our family weather – with Wetterfux' : 'Unser Familien-Wetter – mit Wetterfux';
+  if (navigator.share) {
+    try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
+  }
+  try { await navigator.clipboard.writeText(url); toast(t('copied')); }
+  catch { prompt(t('share'), url); }
 }
 
 // ---- Settings panel ----------------------------------------------------------
@@ -230,6 +268,8 @@ function openSettings() {
   panel.classList.add('open');
   panel.querySelector('[data-set="temp"]').value = settings.units.temp;
   panel.querySelector('[data-set="wind"]').value = settings.units.wind;
+  panel.querySelector('[data-set="cold"]').value = settings.person.cold;
+  panel.querySelector('[data-set="profile"]').value = settings.person.profile;
   panel.querySelector('[data-set="lang"]').value = settings.lang;
   panel.querySelector('[data-set="theme"]').value = settings.theme;
 }
@@ -239,18 +279,27 @@ function onSettingChange(e) {
   const val = e.target.value;
   if (key === 'temp') settings.units.temp = val;
   else if (key === 'wind') settings.units.wind = val;
+  else if (key === 'cold') settings.person.cold = val;
+  else if (key === 'profile') settings.person.profile = val;
   else if (key === 'lang') { settings.lang = val; setLang(val); applyStaticText(); }
   else if (key === 'theme') { settings.theme = val; applyTheme(val); }
   saveSettings(settings);
   if (key === 'temp' || key === 'wind') refresh();
-  else if (key === 'lang' && currentData) renderAll(currentData, settings);
+  else if ((key === 'lang' || key === 'cold' || key === 'profile') && currentData) renderAll(currentData, settings);
 }
 
-function applyTheme(theme) {
-  const root = document.documentElement;
-  root.classList.remove('theme-light', 'theme-dark');
-  if (theme === 'light') root.classList.add('theme-light');
-  else if (theme === 'dark') root.classList.add('theme-dark');
+function applyTheme(design) {
+  const d = design === 'auto'
+    ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'daylight' : 'aurora')
+    : design;
+  document.body.dataset.design = d;
+  updateThemeColor();
+}
+function updateThemeColor() {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (!meta) return;
+  const c = getComputedStyle(document.body).getPropertyValue('--sky-c').trim();
+  if (c) meta.setAttribute('content', c);
 }
 
 // ---- UI helpers --------------------------------------------------------------
@@ -284,6 +333,7 @@ function wireEvents() {
   $('#btnLocate').addEventListener('click', tryGeolocation);
   $('#btnStar').addEventListener('click', toggleStar);
   $('#btnShare').addEventListener('click', share);
+  $('#family').addEventListener('click', (e) => { if (e.target.closest('.fam-share')) shareFamily(); });
   $('#btnSettings').addEventListener('click', openSettings);
   $('#settingsClose').addEventListener('click', closeSettings);
   $('#settingsPanel').addEventListener('click', (e) => { if (e.target.id === 'settingsPanel') closeSettings(); });

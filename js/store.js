@@ -5,8 +5,9 @@ const KEY_PLACES = 'wf.places.v1';
 
 const DEFAULT_SETTINGS = {
   lang: 'de',
-  theme: 'auto', // auto | light | dark
+  theme: 'auto', // design id or 'auto'
   units: { temp: 'C', wind: 'kmh' }, // temp: C|F ; wind: kmh|mph|ms
+  person: { cold: 'normal', profile: 'adult' }, // cold: cold|normal|warm ; profile: adult|kid|bike
   lastPlaceId: null,
 };
 
@@ -23,7 +24,11 @@ function write(key, val) {
 export function loadSettings() {
   const s = read(KEY_SETTINGS, null);
   if (!s) return { ...DEFAULT_SETTINGS };
-  return { ...DEFAULT_SETTINGS, ...s, units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) } };
+  return {
+    ...DEFAULT_SETTINGS, ...s,
+    units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) },
+    person: { ...DEFAULT_SETTINGS.person, ...(s.person || {}) },
+  };
 }
 export function saveSettings(s) { write(KEY_SETTINGS, s); }
 
@@ -87,4 +92,33 @@ export function placeFromParams(search) {
 export function shareURL(place) {
   const base = location.origin + location.pathname;
   return `${base}?${placeToParams(place)}`;
+}
+
+// ---- Family set sharing (all saved places in one link) ----------------------
+export function familyURL(list) {
+  const base = location.origin + location.pathname;
+  const compact = list.map((p) => ({
+    n: p.name, o: +Number(p.lat).toFixed(4), a: +Number(p.lon).toFixed(4),
+    c: p.country_code || '', r: p.admin1 || '',
+  }));
+  return `${base}?fam=${encodeURIComponent(JSON.stringify(compact))}`;
+}
+export function familyFromParams(search) {
+  const p = new URLSearchParams(search);
+  const raw = p.get('fam');
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return null;
+    return arr.map((x) => ({
+      id: `share:${(+x.o).toFixed(3)},${(+x.a).toFixed(3)}`,
+      name: String(x.n || 'Ort').slice(0, 60),
+      admin1: String(x.r || ''), country: '', country_code: String(x.c || '').slice(0, 2),
+      lat: +x.o, lon: +x.a,
+    })).filter((x) => !Number.isNaN(x.lat) && !Number.isNaN(x.lon));
+  } catch { return null; }
+}
+export function importPlaces(list) {
+  (list || []).forEach((p) => addPlace(p));
+  return loadPlaces();
 }

@@ -48,7 +48,7 @@
     </section>
 
     <!-- Alerts -->
-    <section id="alerts" class="alerts" hidden></section>
+    <section id="alerts" class="alerts" role="region" aria-live="polite" aria-label="Wetterwarnungen" hidden></section>
 
     <!-- Hero / current -->
     <section class="hero card">
@@ -61,6 +61,9 @@
       </div>
     </section>
 
+    <!-- Weather moment of the day -->
+    <section id="moment" class="card moment" hidden></section>
+
     <!-- Clothing tip for today -->
     <section id="clothing" class="card clothing"></section>
 
@@ -72,9 +75,14 @@
       <div class="card-title">🌧️ <span id="radarTitle">RegenRadar (live)</span></div>
       <div id="radar-map" class="radar-map"></div>
       <div class="radar-controls">
-        <button id="radar-play" class="radar-btn" aria-label="Play/Pause">▶</button>
+        <button id="radar-play" class="radar-btn" aria-label="Abspielen/Pause" aria-pressed="false">▶</button>
         <input id="radar-slider" type="range" min="0" max="0" value="0" class="radar-slider" aria-label="Zeitleiste" />
         <span id="radar-status" class="radar-status">…</span>
+      </div>
+      <div class="radar-legend" aria-hidden="true">
+        <span>leicht</span>
+        <i class="radar-scale"></i>
+        <span>stark</span>
       </div>
       <p id="radarHint" class="radar-note"></p>
     </section>
@@ -128,7 +136,7 @@
     <div class="overlay-card">
       <div class="search-bar">
         <span class="search-ic">🔍</span>
-        <input id="searchInput" type="search" autocomplete="off" placeholder="Ort suchen …" />
+        <input id="searchInput" type="search" autocomplete="off" aria-label="Ort suchen" placeholder="Ort suchen …" />
         <button id="searchClose" class="icon-btn" aria-label="Schließen">✕</button>
       </div>
       <div id="searchResults" class="search-results"></div>
@@ -158,6 +166,22 @@
         </select>
       </label>
       <label class="set-row">
+        <span>🥶 Kälteempfinden</span>
+        <select data-set="cold">
+          <option value="cold">Ich friere schnell</option>
+          <option value="normal">Normal</option>
+          <option value="warm">Mir ist schnell warm</option>
+        </select>
+      </label>
+      <label class="set-row">
+        <span>🦊 Profil</span>
+        <select data-set="profile">
+          <option value="adult">Erwachsene:r</option>
+          <option value="kid">Kind</option>
+          <option value="bike">Fahrrad</option>
+        </select>
+      </label>
+      <label class="set-row">
         <span>🌐 Sprache</span>
         <select data-set="lang">
           <option value="de">Deutsch</option>
@@ -168,8 +192,18 @@
         <span>🎨 Design</span>
         <select data-set="theme">
           <option value="auto">Automatisch</option>
-          <option value="light">Hell</option>
-          <option value="dark">Dunkel</option>
+          <optgroup label="Dunkel">
+            <option value="aurora">Aurora</option>
+            <option value="midnight">Midnight</option>
+            <option value="nebula">Nebula</option>
+            <option value="forest">Forest</option>
+            <option value="mono">Mono</option>
+          </optgroup>
+          <optgroup label="Hell">
+            <option value="daylight">Daylight</option>
+            <option value="sand">Sand</option>
+            <option value="mist">Mist</option>
+          </optgroup>
         </select>
       </label>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
