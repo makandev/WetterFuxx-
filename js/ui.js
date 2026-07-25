@@ -436,6 +436,39 @@ function flagEmoji(cc) {
   const A = 0x1f1e6;
   return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
 }
+
+// ---- Place comparison --------------------------------------------------------
+export function renderCompare(places, briefs, settings) {
+  const box = $('#compare');
+  if (!box) return;
+  const pairs = places.map((p, i) => ({ p, w: briefs[i] })).filter((x) => x.w);
+  if (pairs.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  const en = getLang() === 'en';
+  const wu = windUnitLabel(settings.units.wind);
+
+  // find warmest and driest for highlight badges
+  let warmest = -Infinity, driest = Infinity;
+  pairs.forEach(({ w }) => { if (w.temp > warmest) warmest = w.temp; if (w.pop != null && w.pop < driest) driest = w.pop; });
+
+  const cols = pairs.map(({ p, w }) => {
+    const badges = [];
+    if (w.temp === warmest) badges.push('🔥');
+    if (w.pop != null && w.pop === driest) badges.push('☀️');
+    return `<div class="cmp-col">
+      <div class="cmp-head"><span class="cmp-flag">${flagEmoji(p.country_code)}</span><span class="cmp-name">${escapeHtml(p.name)}</span></div>
+      <div class="cmp-ic">${weatherSVG(w.code, w.isDay)}</div>
+      <div class="cmp-temp">${tempStr(w.temp)} ${badges.join('')}</div>
+      <div class="cmp-row"><span>${en ? 'Feels' : 'Gefühlt'}</span><b>${tempStr(w.feels)}</b></div>
+      <div class="cmp-row"><span>${en ? 'Hi / Lo' : 'Hoch / Tief'}</span><b>${tempStr(w.hi)} / ${tempStr(w.lo)}</b></div>
+      <div class="cmp-row"><span>${en ? 'Rain' : 'Regen'}</span><b>${w.pop != null ? `${w.pop}%` : '–'}</b></div>
+      <div class="cmp-row"><span>${en ? 'Wind' : 'Wind'}</span><b>${num(w.wind)} ${wu}</b></div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `<div class="card-title">⚖️ ${en ? 'Compare places' : 'Orte vergleichen'}</div>
+    <div class="cmp-scroll"><div class="cmp-grid">${cols}</div></div>`;
+}
 export function escapeHtml(str) {
   return String(str).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
