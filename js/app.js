@@ -5,7 +5,7 @@ import { searchPlaces, reversePlace, getWeather, getAlerts, getCurrentBrief } fr
 import { skyGroup } from './weathercodes.js';
 import { placeLabel } from './format.js';
 import { initEffects, setScene } from './effects.js';
-import { renderAll, renderFamily, escapeHtml } from './ui.js';
+import { renderAll, renderFamily, renderCompare, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
   placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
@@ -109,11 +109,16 @@ let familyReqId = 0;
 async function refreshFamily() {
   const places = loadPlaces();
   const reqId = ++familyReqId;
-  if (places.length < 2) { renderFamily(places, [], currentPlace && currentPlace.id); return; }
+  if (places.length < 2) {
+    renderFamily(places, [], currentPlace && currentPlace.id);
+    renderCompare(places, [], settings);
+    return;
+  }
   renderFamily(places, new Array(places.length).fill(null), currentPlace && currentPlace.id);
   const currents = await Promise.all(places.map((p) => getCurrentBrief(p, settings.units)));
   if (reqId !== familyReqId) return; // superseded
   renderFamily(places, currents, currentPlace && currentPlace.id);
+  renderCompare(places, currents, settings);
   wireFamilyRows(places);
 }
 function wireFamilyRows(places) {
