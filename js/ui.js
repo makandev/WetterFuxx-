@@ -20,6 +20,7 @@ export function renderAll(data, settings) {
   renderHeader(data.place);
   renderAlerts(data, settings);
   renderHero(data, settings);
+  renderAsk(data, settings);
   renderMoment(data, settings);
   renderClothing(data, settings);
   renderRadar(data);
@@ -54,6 +55,37 @@ function renderHero(data, s) {
   $('#heroFeels').textContent = `${t('feelsLike')} ${tempStr(c.apparent_temperature)}`;
   $('#heroHiLo').innerHTML =
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
+}
+
+// ---- Quick answers ("Frag Wetterfux") ---------------------------------------
+function renderAsk(data, s) {
+  const box = $('#ask');
+  const en = getLang() === 'en';
+  const u = s.units;
+  const c = data.forecast.current;
+  const d = data.forecast.daily;
+  const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
+  const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
+  const psum = toMmU(d.precipitation_sum ? (d.precipitation_sum[0] || 0) : 0, precipUnit);
+  const RAIN = [51, 53, 55, 61, 63, 65, 80, 81, 82];
+  const umbrella = (pop >= 50 && psum >= 0.5) || psum >= 2 || RAIN.includes(c.weather_code) || RAIN.includes(d.weather_code[0]);
+  const jacket = toC(c.apparent_temperature, u.temp) < 14;
+  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
+  const cream = uv >= 3;
+  const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 5 && x.hour <= 8);
+  const scrape = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) <= 0 : false;
+
+  const pills = [
+    { e: '☂️', q: en ? 'Umbrella?' : 'Schirm?', a: umbrella },
+    { e: '🧥', q: en ? 'Jacket?' : 'Jacke?', a: jacket },
+    { e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: cream },
+    { e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: scrape },
+  ];
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🦊 ${en ? 'Ask Wetterfux' : 'Frag Wetterfux'}</div>
+    <div class="ask-row">${pills.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
+      <span class="ask-e" aria-hidden="true">${p.e}</span><span class="ask-q">${p.q}</span>
+      <b>${p.a ? (en ? 'Yes' : 'Ja') : (en ? 'No' : 'Nein')}</b></div>`).join('')}</div>`;
 }
 
 // ---- Weather moment of the day ----------------------------------------------

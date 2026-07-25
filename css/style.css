@@ -194,6 +194,17 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .hero-hilo .hi { color: #ffd9a0; }
 .hero-hilo .lo { color: #bcd6ff; }
 
+/* ---- Quick answers ---- */
+.ask-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ask-pill { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card-bg-2); border: 1px solid var(--hairline); font-size: 14px; }
+.ask-e { font-size: 18px; }
+.ask-q { flex: 1; color: var(--text-dim); }
+.ask-pill b { font-weight: 700; }
+.ask-pill.yes b { color: #7fb0ff; }
+.ask-pill.no b { color: #7fd29a; }
+body[data-design="daylight"] .ask-pill.yes b, body[data-design="sand"] .ask-pill.yes b, body[data-design="mist"] .ask-pill.yes b { color: #2b6fd8; }
+body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.no b, body[data-design="mist"] .ask-pill.no b { color: #1f9d57; }
+
 /* ---- Weather moment of the day ---- */
 .moment { display: flex; align-items: center; gap: 14px; background: linear-gradient(150deg, rgba(255,200,120,0.22), rgba(255,150,90,0.12)); }
 .mom-emoji { font-size: 40px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0,0,0,.2)); }
