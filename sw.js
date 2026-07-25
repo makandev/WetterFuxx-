@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v5';
+const CACHE = 'wetterfux-v6';
 const SHELL = [
   './',
   './index.html',
@@ -24,7 +24,13 @@ const SHELL = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Cache each asset independently so one 404 can't fail the whole install.
+  // Do NOT skipWaiting here — the page asks the user first, then messages us.
+  e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))));
+});
+
+self.addEventListener('message', (e) => {
+  if (e.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (e) => {
@@ -49,22 +55,24 @@ self.addEventListener('fetch', (e) => {
   if (/open-meteo\.com|bigdatacloud\.net|brightsky\.dev|api\.rainviewer\.com/.test(url.hostname)) {
     e.respondWith(
       fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
+        if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
         return res;
       }).catch(() => caches.match(req))
     );
     return;
   }
 
-  // App shell → cache-first
+  // App shell → stale-while-revalidate for same-origin (fresh after deploy)
   e.respondWith(
-    caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-      if (url.origin === location.origin) {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy));
-      }
-      return res;
-    }).catch(() => caches.match('./index.html')))
+    caches.match(req).then((cached) => {
+      const network = fetch(req).then((res) => {
+        if (res.ok && url.origin === location.origin) {
+          const copy = res.clone();
+          caches.open(CACHE).then((c) => c.put(req, copy));
+        }
+        return res;
+      }).catch(() => cached || caches.match('./index.html'));
+      return cached || network;
+    })
   );
 });
