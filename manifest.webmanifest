@@ -1,4 +1,5 @@
 {
+  "id": "/WetterFuxx-/",
   "name": "Wetterfux – Wetter für die ganze Familie",
   "short_name": "Wetterfux",
   "description": "Professionelle Wetter-App mit 14-Tage-Vorhersage, Luftqualität, Pollen, UV-Index und Regen-Radar. Kostenlos.",
@@ -6,7 +7,11 @@
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
+  "shortcuts": [
+    { "name": "Mein Standort", "short_name": "Standort", "url": "./index.html" }
+  ],
   "background_color": "#16324f",
   "theme_color": "#1b2a4a",
   "categories": ["weather", "utilities", "lifestyle"],

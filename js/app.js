@@ -40,8 +40,12 @@ async function boot() {
   const last = saved.find((p) => p.id === settings.lastPlaceId) || saved[0];
   if (last) return selectPlace(last, false);
 
-  tryGeolocation();
+  // First visit, nothing saved → friendly welcome (permission priming)
+  showWelcome();
 }
+
+function showWelcome() { $('#welcome').classList.add('open'); }
+function hideWelcome() { $('#welcome').classList.remove('open'); }
 
 function applyStaticText() {
   document.documentElement.lang = getLang();
@@ -52,6 +56,13 @@ function applyStaticText() {
   $('#btnSettings').title = t('settings');
   $('#btnShare').title = t('share');
   $('#savedTitle').textContent = t('saved');
+  $('#welcomeTitle').textContent = t('welcomeTitle');
+  $('#welcomeText').textContent = t('welcomeText');
+  $('#welcomeLocate').textContent = t('useLocation');
+  $('#welcomeSearch').textContent = t('searchPlaceBtn');
+  $('#updateBanner').textContent = t('updateAvail');
+  $('#offlineBanner').textContent = t('offlineNote');
+  $('#btnInstall').textContent = t('installApp');
   document.title = `${t('appName')} · ${t('tagline')}`;
 }
 
@@ -59,6 +70,7 @@ function applyStaticText() {
 let selReqId = 0;
 async function selectPlace(place, updateHistory = true) {
   const my = ++selReqId;
+  hideWelcome();
   currentPlace = place;
   settings.lastPlaceId = place.id;
   saveSettings(settings);
@@ -87,7 +99,8 @@ async function selectPlace(place, updateHistory = true) {
     refreshFamily();
   } catch (e) {
     console.error(e);
-    showError(t('errGeneric'));
+    if (my !== selReqId) return;
+    showError(navigator.onLine ? t('errGeneric') : t('errOffline'));
   }
 }
 
@@ -352,11 +365,106 @@ function isTyping() {
   return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
 }
 
-// ---- Service worker ----------------------------------------------------------
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+// ---- Onboarding wiring -------------------------------------------------------
+function wireWelcome() {
+  $('#welcomeLocate').addEventListener('click', () => { hideWelcome(); tryGeolocation(); });
+  $('#welcomeSearch').addEventListener('click', () => { hideWelcome(); openSearch(); });
+  // Empty saved list acts as a call to action
+  $('#savedEmpty').addEventListener('click', openSearch);
+}
+
+// ---- Install prompt (Android/Desktop) ---------------------------------------
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const btn = $('#btnInstall');
+  if (btn) btn.hidden = false;
+});
+function wireInstall() {
+  const btn = $('#btnInstall');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    try { await deferredPrompt.userChoice; } catch { /* ignore */ }
+    deferredPrompt = null;
+    btn.hidden = true;
+  });
+  window.addEventListener('appinstalled', () => { btn.hidden = true; deferredPrompt = null; });
+}
+
+// ---- Offline awareness -------------------------------------------------------
+function wireOffline() {
+  const banner = $('#offlineBanner');
+  const update = () => {
+    if (navigator.onLine) {
+      banner.hidden = true;
+      if (currentData && Date.now() - currentData.fetchedAt > 300000) refresh();
+    } else {
+      banner.hidden = false;
+    }
+  };
+  window.addEventListener('online', update);
+  window.addEventListener('offline', update);
+  if (!navigator.onLine) banner.hidden = false;
+}
+
+// ---- Pull to refresh ---------------------------------------------------------
+function wirePullToRefresh() {
+  const ptr = $('#ptr');
+  let startY = 0, pulling = false, dist = 0;
+  const THRESH = 70;
+  window.addEventListener('touchstart', (e) => {
+    if (window.scrollY <= 0 && e.touches.length === 1) { startY = e.touches[0].clientY; pulling = true; }
+  }, { passive: true });
+  window.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    dist = e.touches[0].clientY - startY;
+    if (dist > 0 && window.scrollY <= 0) {
+      const d = Math.min(dist, 110);
+      ptr.style.transform = `translateX(-50%) translateY(${d}px)`;
+      ptr.classList.toggle('ready', d >= THRESH);
+    }
+  }, { passive: true });
+  window.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+    if (dist >= THRESH) { ptr.classList.add('spin'); refresh(); setTimeout(() => ptr.classList.remove('spin'), 900); }
+    ptr.style.transform = 'translateX(-50%) translateY(0)';
+    ptr.classList.remove('ready');
+    dist = 0;
   });
 }
 
+// ---- Service worker with controlled update ----------------------------------
+function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener('statechange', () => {
+          if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+            const banner = $('#updateBanner');
+            banner.hidden = false;
+            banner.onclick = () => { banner.hidden = true; nw.postMessage('SKIP_WAITING'); };
+          }
+        });
+      });
+      let refreshed = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshed) return; refreshed = true; location.reload();
+      });
+    } catch { /* SW optional */ }
+  });
+}
+
+wireWelcome();
+wireInstall();
+wireOffline();
+wirePullToRefresh();
+registerSW();
 boot();

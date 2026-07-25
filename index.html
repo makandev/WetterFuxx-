@@ -11,7 +11,13 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Wetterfux" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="preconnect" href="https://api.open-meteo.com" />
+  <link rel="preconnect" href="https://air-quality-api.open-meteo.com" />
+  <link rel="preconnect" href="https://geocoding-api.open-meteo.com" />
+  <link rel="dns-prefetch" href="https://api.rainviewer.com" />
+  <link rel="dns-prefetch" href="https://api.brightsky.dev" />
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="./css/style.css" />
 </head>
@@ -206,11 +212,32 @@
           </optgroup>
         </select>
       </label>
+      <button id="btnInstall" class="btn btn-block install-btn" hidden>📲 App installieren</button>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- Pull-to-refresh indicator -->
+  <div id="ptr" class="ptr" aria-hidden="true"><div class="ptr-spin"></div></div>
+
+  <!-- Update available -->
+  <button id="updateBanner" class="update-banner" hidden>🔄 Neue Version verfügbar – tippen zum Aktualisieren</button>
+
+  <!-- Offline notice -->
+  <div id="offlineBanner" class="offline-banner" role="status" hidden>📴 Offline – zeige zuletzt geladene Daten</div>
+
+  <!-- Welcome / onboarding -->
+  <div id="welcome" class="overlay welcome-overlay">
+    <div class="overlay-card welcome-card">
+      <div class="welcome-fox">🦊</div>
+      <h2 id="welcomeTitle">Willkommen bei Wetterfux</h2>
+      <p id="welcomeText">Kostenloses, professionelles Wetter für die ganze Familie.</p>
+      <button id="welcomeLocate" class="btn btn-block">📍 Standort verwenden</button>
+      <button id="welcomeSearch" class="btn btn-ghost btn-block">🔍 Ort suchen</button>
+    </div>
+  </div>
 
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script type="module" src="./js/app.js"></script>
