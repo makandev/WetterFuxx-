@@ -5,8 +5,9 @@ const KEY_PLACES = 'wf.places.v1';
 
 const DEFAULT_SETTINGS = {
   lang: 'de',
-  theme: 'auto', // auto | light | dark
+  theme: 'auto', // design id or 'auto'
   units: { temp: 'C', wind: 'kmh' }, // temp: C|F ; wind: kmh|mph|ms
+  person: { cold: 'normal', profile: 'adult' }, // cold: cold|normal|warm ; profile: adult|kid|bike
   lastPlaceId: null,
 };
 
@@ -23,7 +24,11 @@ function write(key, val) {
 export function loadSettings() {
   const s = read(KEY_SETTINGS, null);
   if (!s) return { ...DEFAULT_SETTINGS };
-  return { ...DEFAULT_SETTINGS, ...s, units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) } };
+  return {
+    ...DEFAULT_SETTINGS, ...s,
+    units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) },
+    person: { ...DEFAULT_SETTINGS.person, ...(s.person || {}) },
+  };
 }
 export function saveSettings(s) { write(KEY_SETTINGS, s); }
 

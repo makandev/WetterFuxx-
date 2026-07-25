@@ -238,6 +238,8 @@ function openSettings() {
   panel.classList.add('open');
   panel.querySelector('[data-set="temp"]').value = settings.units.temp;
   panel.querySelector('[data-set="wind"]').value = settings.units.wind;
+  panel.querySelector('[data-set="cold"]').value = settings.person.cold;
+  panel.querySelector('[data-set="profile"]').value = settings.person.profile;
   panel.querySelector('[data-set="lang"]').value = settings.lang;
   panel.querySelector('[data-set="theme"]').value = settings.theme;
 }
@@ -247,11 +249,13 @@ function onSettingChange(e) {
   const val = e.target.value;
   if (key === 'temp') settings.units.temp = val;
   else if (key === 'wind') settings.units.wind = val;
+  else if (key === 'cold') settings.person.cold = val;
+  else if (key === 'profile') settings.person.profile = val;
   else if (key === 'lang') { settings.lang = val; setLang(val); applyStaticText(); }
   else if (key === 'theme') { settings.theme = val; applyTheme(val); }
   saveSettings(settings);
   if (key === 'temp' || key === 'wind') refresh();
-  else if (key === 'lang' && currentData) renderAll(currentData, settings);
+  else if ((key === 'lang' || key === 'cold' || key === 'profile') && currentData) renderAll(currentData, settings);
 }
 
 function applyTheme(design) {

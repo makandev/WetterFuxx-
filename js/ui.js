@@ -3,6 +3,7 @@
 import { t, getLang } from './i18n.js';
 import { describe, weatherSVG } from './weathercodes.js';
 import { buildClothingAdvice } from './advice.js';
+import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
@@ -67,19 +68,28 @@ function renderClothing(data, s) {
   const umbrella = `<span class="cloth-umb ${a.umbrella ? 'yes' : 'no'}">☂️ ${a.umbrella
     ? (getLang() === 'en' ? 'Umbrella: yes' : 'Schirm: ja')
     : (getLang() === 'en' ? 'Umbrella: no' : 'Schirm: nein')}</span>`;
+  const w = a.why;
+  const whyText = `${t('feelsLike')} <b>${w.feels}${w.tempUnit}</b> · ${t('windGust')} <b>${w.gust} ${w.windUnit}</b> · ${t('precipProb')} <b>${w.pop}%</b> · UV <b>${w.uv}</b>`;
   box.innerHTML = `
     <div class="card-title">🧥 ${t('clothing')}</div>
     <div class="cloth-head">
-      <span class="cloth-big" aria-hidden="true">${a.emoji}</span>
+      <div class="cloth-fox" aria-hidden="true">${foxSVG(a.mascot)}</div>
       <div class="cloth-headtext">
         <span class="cloth-title">${a.title}</span>
         <span class="cloth-summary">${a.summary}</span>
       </div>
     </div>
-    <div class="cloth-meta">${umbrella}</div>
+    <div class="cloth-meta">${umbrella}<button class="cloth-why-btn" aria-expanded="false">${t('why')}</button></div>
+    <div class="cloth-why" hidden>${whyText}</div>
     ${slots}
     <div class="cloth-items">${chips}</div>
     ${a.note ? `<div class="cloth-note">💡 ${a.note}</div>` : ''}`;
+  const wb = box.querySelector('.cloth-why-btn');
+  if (wb) wb.addEventListener('click', () => {
+    const p = box.querySelector('.cloth-why');
+    const open = !p.hidden;
+    p.hidden = open; wb.setAttribute('aria-expanded', String(!open));
+  });
 }
 
 // ---- Live rain radar (Leaflet + RainViewer) ---------------------------------
