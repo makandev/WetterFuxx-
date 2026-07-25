@@ -2,6 +2,7 @@
 
 import { t, getLang } from './i18n.js';
 import { describe, weatherSVG } from './weathercodes.js';
+import { buildClothingAdvice } from './advice.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
@@ -14,6 +15,7 @@ export function renderAll(data, settings) {
   renderHeader(data.place);
   renderAlerts(data, settings);
   renderHero(data, settings);
+  renderClothing(data, settings);
   renderNowcast(data);
   renderDetails(data, settings);
   renderHourly(data, settings);
@@ -42,6 +44,22 @@ function renderHero(data, s) {
   $('#heroFeels').textContent = `${t('feelsLike')} ${tempStr(c.apparent_temperature)}`;
   $('#heroHiLo').innerHTML =
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
+}
+
+// ---- Clothing tip for today --------------------------------------------------
+function renderClothing(data, s) {
+  const box = $('#clothing');
+  const a = buildClothingAdvice(data, s);
+  const chips = a.items.map((it) =>
+    `<span class="cloth-item"><span class="cloth-emoji">${it.emoji}</span>${it.text}</span>`).join('');
+  box.innerHTML = `
+    <div class="card-title">🧥 ${t('clothing')}</div>
+    <div class="cloth-head">
+      <span class="cloth-big">${a.emoji}</span>
+      <span class="cloth-title">${a.title}</span>
+    </div>
+    <div class="cloth-items">${chips}</div>
+    ${a.note ? `<div class="cloth-note">💡 ${a.note}</div>` : ''}`;
 }
 
 // ---- Derived advisories (a "premium" touch, computed locally) ---------------
