@@ -431,10 +431,33 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* ---- Clothing tip (rich) ---- */
-.cloth-head { align-items: flex-start; }
+.cloth-head { align-items: center; gap: 14px; }
+.cloth-fox { width: 62px; height: 62px; flex-shrink: 0; filter: drop-shadow(0 3px 8px rgba(0,0,0,.2)); }
+.cloth-fox svg { width: 100%; height: 100%; }
 .cloth-headtext { display: flex; flex-direction: column; gap: 3px; }
 .cloth-summary { font-size: 14px; color: var(--text-dim); line-height: 1.45; }
-.cloth-meta { margin: 12px 0 4px; }
+.cloth-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 12px 0 4px; }
+.cloth-why-btn { background: var(--card-bg-2); border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cloth-why-btn:active { transform: scale(0.96); }
+.cloth-why { margin-top: 10px; font-size: 13px; color: var(--text-dim); background: var(--card-bg-2); border-radius: 12px; padding: 10px 12px; line-height: 1.5; }
+.cloth-why b { color: var(--text); font-weight: 700; }
+/* Fox mascot */
+.fox-face { fill: #f2933f; }
+.fox-ear { fill: #e07d34; }
+.fox-ear-in { fill: #ffd9b0; }
+.fox-cheek { fill: #fff4e8; }
+.fox-eye { fill: #2a2320; }
+.fox-nose { fill: #2a2320; }
+.fox-mouth { stroke: #2a2320; stroke-width: 1.5; fill: none; stroke-linecap: round; }
+.beanie-top { fill: #5b8fd8; }
+.beanie-band { fill: #4a7ec7; }
+.beanie-pom { fill: #eef2ff; }
+.scarf-main { fill: #e05a5a; }
+.scarf-end { fill: #c94a4a; }
+.shade-lens { fill: #23324a; }
+.shade-bridge { stroke: #23324a; stroke-width: 2; }
+.umb-top { fill: #ff8a6b; }
+.umb-tip { stroke: #d96a4d; stroke-width: 2; stroke-linecap: round; }
 .cloth-umb { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; }
 .cloth-umb.yes { background: rgba(120,175,255,0.28); color: #dbe9ff; }
 .cloth-umb.no { background: rgba(120,210,150,0.24); color: #d8f5e0; }

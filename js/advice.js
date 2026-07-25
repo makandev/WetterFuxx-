@@ -22,7 +22,13 @@ export function buildClothingAdvice(data, settings) {
   const d = data.forecast.daily;
   const h = data.forecast.hourly;
 
+  const person = settings.person || { cold: 'normal', profile: 'adult' };
+  const bike = person.profile === 'bike';
+  const feelsOffset = (person.cold === 'cold' ? -3 : person.cold === 'warm' ? 3 : 0)
+    + (person.profile === 'kid' ? -2 : 0);
+
   const feels = toC(cur.apparent_temperature, u.temp);
+  const feelsBand = feels + feelsOffset;
   const tmax = toC(d.temperature_2m_max[0], u.temp);
   const tmin = toC(d.temperature_2m_min[0], u.temp);
   const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
@@ -32,7 +38,7 @@ export function buildClothingAdvice(data, settings) {
   const codeToday = d.weather_code[0];
   const curCode = cur.weather_code;
 
-  const band = tempBand(feels);
+  const band = tempBand(feelsBand);
   const items = [];
   const seen = new Set();
   const add = (emoji, text) => { const k = emoji + text; if (!seen.has(k)) { seen.add(k); items.push({ emoji, text }); } };
@@ -46,9 +52,11 @@ export function buildClothingAdvice(data, settings) {
     else add('🌂', L('Nimm einen Schirm mit – es kann nass werden', 'Take an umbrella – it may turn wet'));
   }
 
-  // Wind (gusts, DWD-nah)
-  if (gust >= 70) add('💨', L('Winddicht anziehen – stürmische Böen', 'Wear windproof gear – stormy gusts'));
-  else if (gust >= 45) add('🧥', L('Es ist windig – winddichte Jacke hilft', 'It’s windy – a windproof jacket helps'));
+  // Wind (gusts, DWD-nah; cyclists are more exposed → lower thresholds)
+  const windItem = bike ? 30 : 45;
+  const windStorm = bike ? 55 : 70;
+  if (gust >= windStorm) add('💨', L('Winddicht anziehen – stürmische Böen', 'Wear windproof gear – stormy gusts'));
+  else if (gust >= windItem) add('🧥', bike ? L('Windig – auf dem Rad zieht’s, winddichte Jacke', 'Windy – it bites on the bike, wear a windproof jacket') : L('Es ist windig – winddichte Jacke hilft', 'It’s windy – a windproof jacket helps'));
 
   // Snow / ice
   if (SNOW_CODES.includes(curCode) || SNOW_CODES.includes(codeToday)) add('🥾', L('Warme, feste Schuhe – es schneit', 'Warm, sturdy boots – it’s snowing'));
@@ -81,7 +89,17 @@ export function buildClothingAdvice(data, settings) {
              `It cools to ${Math.round(eve.temp)}° by evening – bring a jacket.`);
   } else if (band.note) note = band.note;
 
-  return { emoji: band.emoji, title: band.title, summary, slots, items, umbrella: umbrellaNeed, note };
+  const snowy = SNOW_CODES.includes(curCode) || SNOW_CODES.includes(codeToday);
+  const mascot = { level: band.key, rain: umbrellaNeed, sun: uv >= 6, wind: gust >= windItem, snow: snowy };
+  const why = {
+    feels: Math.round(cur.apparent_temperature),
+    gust: Math.round(d.wind_gusts_10m_max ? (d.wind_gusts_10m_max[0] || 0) : 0),
+    pop: Math.round(pop), uv: Math.round(uv),
+    tempUnit: u.temp === 'F' ? '°F' : '°C',
+    windUnit: u.wind === 'mph' ? 'mph' : u.wind === 'ms' ? 'm/s' : 'km/h',
+  };
+
+  return { emoji: band.emoji, title: band.title, summary, slots, items, umbrella: umbrellaNeed, note, mascot, why };
 }
 
 // --- temperature band ---------------------------------------------------------
