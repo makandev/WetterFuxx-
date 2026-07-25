@@ -16,26 +16,40 @@ Web-App (PWA) auf Handy, Tablet und Desktop.
 |-----------|--------------|
 | **Aktuell** | Temperatur, gefühlte Temperatur, Höchst-/Tiefstwerte, animiertes Wettersymbol |
 | **Vorhersage** | **48 h stündlich** mit Temperaturkurve · **14-Tage-Trend** mit Min/Max-Balken |
-| **Regen-Radar** | Nowcast: „Regen in X Minuten“ auf 15-Minuten-Basis (nächste 2 h) |
+| **🌧️ RegenRadar (live)** | Echte Karte, auf der Regenwolken heranziehen – Play/Pause & Zeitleiste (Vergangenheit + Vorhersage) |
+| **Regen-Nowcast** | „Regen in X Minuten“ auf 15-Minuten-Basis (nächste 2 h) |
+| **⚠️ Amtliche Warnungen** | Offizielle **DWD**-Unwetterwarnungen (Sturm, Gewitter, Glätte, Hitze) mit Warnstufen |
+| **👪 Familien-Wetter** | Alle gespeicherten Orte mit Live-Temperatur auf einen Blick – ideal, wenn die Familie verteilt wohnt |
+| **🕒 Beste Zeit heute** | Optimale Zeitfenster für Draußensein, Sport/Joggen und Wäschetrocknen |
+| **🧥 Kleidungstipp** | Konkrete Empfehlung aus Temperatur, Regen, Wind, UV, Glätte & Tag/Nacht-Schwankung |
+| **🧪 Biowetter & Gesundheit** | Luftdruck-Tendenz, Kopfschmerz-Reiz, Kreislaufbelastung, Schwüle, Erkältungswetter |
 | **Luftqualität** | Europäischer Luftqualitätsindex (AQI), PM2.5, PM10, Ozon, NO₂ |
 | **Pollen** | Gräser, Birke, Erle, Ambrosia, Beifuß, Olive |
-| **Gesundheit** | UV-Index mit Empfehlung, Taupunkt, Luftfeuchte, Luftdruck, Sicht |
 | **Sonne & Mond** | Sonnenauf-/untergang mit Tagesbogen, Tageslänge, Mondphase |
-| **Warnungen** | Automatische Hinweise bei Sturmböen, Gewitter, Glatteis, extremer UV-Strahlung |
+| **Details** | UV-Index mit Empfehlung, Taupunkt, Luftfeuchte, Luftdruck, Sicht, Wind-Kompass |
 | **Komfort** | Mehrere Orte speichern · GPS-Standort · Suche · °C/°F · km/h/mph/m/s · DE/EN · Hell/Dunkel |
 | **Teilen** | Orte per Link mit der Familie teilen · installierbar (Startbildschirm) · offline-fähig |
 
 Die Oberfläche passt Farben und Animationen dynamisch ans Wetter und die Tageszeit an
 (Sonnenstrahlen, ziehende Wolken, Regen, Schnee, Sternenhimmel bei Nacht).
 
+> **Besser als klassische Wetter-Apps:** Familien-Dashboard, personalisierter Kleidungstipp,
+> „Beste Zeit heute" und Biowetter gibt es so in den meisten kostenlosen Apps nicht –
+> hier alles gratis und werbefrei.
+
 ---
 
 ## 📊 Datenquelle
 
-Alle Wetterdaten kommen von [**Open-Meteo**](https://open-meteo.com/) – einem kostenlosen,
-offenen Wetterdienst **ohne API-Schlüssel** und ohne Nutzer-Tracking. Reverse-Geocoding
-(Koordinaten → Ortsname) über [BigDataCloud](https://www.bigdatacloud.com/). Es entstehen
-**keine Kosten** – weder für dich noch für deine Familie.
+Alle Daten stammen aus kostenlosen, offenen Diensten **ohne API-Schlüssel** und ohne Nutzer-Tracking:
+
+- [**Open-Meteo**](https://open-meteo.com/) – Wetter, Vorhersage, Luftqualität, Pollen
+- [**RainViewer**](https://www.rainviewer.com/) – Radar-Kacheln fürs animierte RegenRadar
+- [**Bright Sky**](https://brightsky.dev/) – amtliche **DWD**-Unwetterwarnungen (DE/AT)
+- [**OpenStreetMap**](https://www.openstreetmap.org/) – Kartenhintergrund (via [Leaflet](https://leafletjs.com/), lokal eingebunden)
+- [**BigDataCloud**](https://www.bigdatacloud.com/) – Reverse-Geocoding (Koordinaten → Ortsname)
+
+Es entstehen **keine Kosten** – weder für dich noch für deine Familie.
 
 ---
 
@@ -95,12 +109,16 @@ js/
   app.js                 Steuerung: Standort, Suche, Orte, Einstellungen, Teilen
   api.js                 Open-Meteo-Anbindung (Wetter, Luftqualität, Geocoding)
   ui.js                  Rendern aller Karten
+  radar.js               Animiertes RegenRadar (Leaflet + RainViewer)
+  advice.js              Kleidungstipp-Logik
   effects.js             Canvas-Hintergründe (Regen, Schnee, Sterne, Sonne)
   weathercodes.js        WMO-Wettercodes + animierte SVG-Symbole
   format.js              Formatierung, Mondphase, AQI/UV-Level, Windrichtung
   store.js               Einstellungen & gespeicherte Orte (localStorage) + Share-Links
   i18n.js                Übersetzungen (Deutsch / Englisch)
+vendor/leaflet/          Kartenbibliothek Leaflet (lokal, kein CDN)
 icons/                   App-Icons (PNG + SVG)
+.well-known/             assetlinks.json (Vorlage für Android-TWA)
 scripts/make_icons.py    Generator für die Icons
 ```
 

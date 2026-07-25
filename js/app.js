@@ -1,11 +1,11 @@
 // app.js — application controller
 
 import { t, setLang, getLang, LANGS } from './i18n.js';
-import { searchPlaces, reversePlace, getWeather } from './api.js';
+import { searchPlaces, reversePlace, getWeather, getAlerts, getCurrentBrief } from './api.js';
 import { skyGroup } from './weathercodes.js';
 import { placeLabel } from './format.js';
 import { initEffects, setScene } from './effects.js';
-import { renderAll } from './ui.js';
+import { renderAll, renderFamily } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
   placeFromParams, shareURL, samePlace,
@@ -63,16 +63,39 @@ async function selectPlace(place, updateHistory = true) {
     history.replaceState({}, '', url);
   }
   try {
-    const data = await getWeather(place, settings.units);
+    const [data, officialAlerts] = await Promise.all([
+      getWeather(place, settings.units),
+      getAlerts(place.lat, place.lon),
+    ]);
+    data.officialAlerts = officialAlerts;
     currentData = data;
     const c = data.forecast.current;
     setScene(skyGroup(c.weather_code), c.is_day === 1);
     renderAll(data, settings);
     hideLoading();
+    refreshFamily();
   } catch (e) {
     console.error(e);
     showError(t('errGeneric'));
   }
+}
+
+// Family dashboard: live current conditions for every saved place
+let familyReqId = 0;
+async function refreshFamily() {
+  const places = loadPlaces();
+  const reqId = ++familyReqId;
+  if (places.length < 2) { renderFamily(places, [], currentPlace && currentPlace.id); return; }
+  renderFamily(places, new Array(places.length).fill(null), currentPlace && currentPlace.id);
+  const currents = await Promise.all(places.map((p) => getCurrentBrief(p, settings.units)));
+  if (reqId !== familyReqId) return; // superseded
+  renderFamily(places, currents, currentPlace && currentPlace.id);
+  wireFamilyRows(places);
+}
+function wireFamilyRows(places) {
+  document.querySelectorAll('#family .fam-row').forEach((row) => {
+    row.addEventListener('click', () => selectPlace(places[+row.dataset.i]));
+  });
 }
 
 function refresh() {
@@ -165,6 +188,7 @@ function renderSavedChips() {
       const removed = places[+btn.dataset.del];
       removePlace(removed);
       renderSavedChips();
+      refreshFamily();
     });
   });
 }
@@ -175,6 +199,7 @@ function toggleStar() {
   else addPlace(currentPlace);
   updateStar();
   renderSavedChips();
+  refreshFamily();
 }
 function updateStar() {
   const btn = $('#btnStar');
