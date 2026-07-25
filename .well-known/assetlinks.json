@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ERSETZEN.mit.deinem.package.namen",
+      "sha256_cert_fingerprints": [
+        "ERSETZEN_MIT_DEM_SHA256_FINGERPRINT_AUS_PWABUILDER"
+      ]
+    }
+  }
+]
