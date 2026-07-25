@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1b2a4a" />
+  <meta name="description" content="Wetterfux – professionelle Wetter-App mit 14-Tage-Vorhersage, Luftqualität, Pollen, UV und Regen-Radar. Kostenlos für die ganze Familie." />
+  <title>Wetterfux</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body class="sky-clear">
+  <canvas id="bg-canvas" class="bg-canvas" aria-hidden="true"></canvas>
+  <div class="bg-overlay" aria-hidden="true"></div>
+
+  <div class="app">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">🦊</span>
+        <div class="brand-txt">
+          <h1 id="placeName">Wetterfux</h1>
+          <p id="placeSub"></p>
+        </div>
+        <button id="btnStar" class="icon-btn star" hidden title="Speichern">☆</button>
+      </div>
+      <nav class="actions">
+        <button id="btnLocate" class="icon-btn" aria-label="Mein Standort">📍</button>
+        <button id="btnSearch" class="icon-btn" aria-label="Suchen">🔍</button>
+        <button id="btnShare" class="icon-btn" aria-label="Teilen">↗</button>
+        <button id="btnSettings" class="icon-btn" aria-label="Einstellungen">⚙️</button>
+      </nav>
+    </header>
+
+    <p id="tagline" class="tagline"></p>
+
+    <!-- Saved place chips -->
+    <section class="saved">
+      <div class="saved-head"><span id="savedTitle">Gespeicherte Orte</span></div>
+      <div id="savedChips" class="chips"></div>
+      <p id="savedEmpty" class="saved-empty" hidden></p>
+    </section>
+
+    <!-- Alerts -->
+    <section id="alerts" class="alerts" hidden></section>
+
+    <!-- Hero / current -->
+    <section class="hero card">
+      <div id="heroIcon" class="hero-icon"></div>
+      <div class="hero-main">
+        <div id="heroTemp" class="hero-temp">–</div>
+        <div id="heroDesc" class="hero-desc"></div>
+        <div id="heroFeels" class="hero-feels"></div>
+        <div id="heroHiLo" class="hero-hilo"></div>
+      </div>
+    </section>
+
+    <!-- Clothing tip for today -->
+    <section id="clothing" class="card clothing"></section>
+
+    <!-- Rain nowcast -->
+    <section id="nowcast" class="card nowcast" hidden></section>
+
+    <!-- Detail tiles -->
+    <section id="details" class="card"></section>
+
+    <!-- Hourly -->
+    <section id="hourly" class="card"></section>
+
+    <div class="two-col">
+      <!-- Air quality -->
+      <section id="air" class="card" hidden></section>
+      <!-- Sun & moon -->
+      <section id="sunmoon" class="card"></section>
+    </div>
+
+    <!-- 14 day -->
+    <section id="daily" class="card"></section>
+
+    <footer class="foot">
+      <span id="updated"></span>
+      <span class="dot">·</span>
+      <span>Daten: <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a></span>
+    </footer>
+  </div>
+
+  <!-- Loader -->
+  <div id="loader" class="loader" hidden>
+    <div class="spinner"></div>
+    <p>Lade Wetterdaten …</p>
+  </div>
+
+  <!-- Error -->
+  <div id="errorBox" class="errorbox" hidden>
+    <p class="err-msg"></p>
+    <button id="errRetry" class="btn">Erneut versuchen</button>
+  </div>
+
+  <!-- Search overlay -->
+  <div id="searchOverlay" class="overlay search-overlay">
+    <div class="overlay-card">
+      <div class="search-bar">
+        <span class="search-ic">🔍</span>
+        <input id="searchInput" type="search" autocomplete="off" placeholder="Ort suchen …" />
+        <button id="searchClose" class="icon-btn" aria-label="Schließen">✕</button>
+      </div>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </div>
+
+  <!-- Settings panel -->
+  <div id="settingsPanel" class="overlay settings-overlay">
+    <div class="overlay-card">
+      <div class="settings-head">
+        <h2>⚙️ Einstellungen</h2>
+        <button id="settingsClose" class="icon-btn" aria-label="Schließen">✕</button>
+      </div>
+      <label class="set-row">
+        <span>🌡️ Temperatur</span>
+        <select data-set="temp">
+          <option value="C">Celsius (°C)</option>
+          <option value="F">Fahrenheit (°F)</option>
+        </select>
+      </label>
+      <label class="set-row">
+        <span>💨 Windgeschwindigkeit</span>
+        <select data-set="wind">
+          <option value="kmh">km/h</option>
+          <option value="mph">mph</option>
+          <option value="ms">m/s</option>
+        </select>
+      </label>
+      <label class="set-row">
+        <span>🌐 Sprache</span>
+        <select data-set="lang">
+          <option value="de">Deutsch</option>
+          <option value="en">English</option>
+        </select>
+      </label>
+      <label class="set-row">
+        <span>🎨 Design</span>
+        <select data-set="theme">
+          <option value="auto">Automatisch</option>
+          <option value="light">Hell</option>
+          <option value="dark">Dunkel</option>
+        </select>
+      </label>
+      <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

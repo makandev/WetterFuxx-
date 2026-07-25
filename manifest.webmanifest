@@ -1,0 +1,19 @@
+{
+  "name": "Wetterfux – Wetter für die ganze Familie",
+  "short_name": "Wetterfux",
+  "description": "Professionelle Wetter-App mit 14-Tage-Vorhersage, Luftqualität, Pollen, UV-Index und Regen-Radar. Kostenlos.",
+  "lang": "de",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16324f",
+  "theme_color": "#1b2a4a",
+  "categories": ["weather", "utilities", "lifestyle"],
+  "icons": [
+    { "src": "./icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
