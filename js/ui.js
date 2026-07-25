@@ -3,6 +3,7 @@
 import { t, getLang } from './i18n.js';
 import { describe, weatherSVG } from './weathercodes.js';
 import { buildClothingAdvice } from './advice.js';
+import { mountRadar } from './radar.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
@@ -16,10 +17,13 @@ export function renderAll(data, settings) {
   renderAlerts(data, settings);
   renderHero(data, settings);
   renderClothing(data, settings);
+  renderRadar(data);
   renderNowcast(data);
+  renderActivity(data, settings);
   renderDetails(data, settings);
   renderHourly(data, settings);
   renderAir(data);
+  renderBiowetter(data, settings);
   renderSunMoon(data);
   renderDaily(data, settings);
   $('#updated').textContent = `${t('updated')} ${formatTime(new Date(data.fetchedAt).toISOString())}`;
@@ -62,17 +66,172 @@ function renderClothing(data, s) {
     ${a.note ? `<div class="cloth-note">💡 ${a.note}</div>` : ''}`;
 }
 
-// ---- Derived advisories (a "premium" touch, computed locally) ---------------
+// ---- Live rain radar (Leaflet + RainViewer) ---------------------------------
+function renderRadar(data) {
+  const title = $('#radarTitle'); if (title) title.textContent = t('radar');
+  const hint = $('#radarHint'); if (hint) hint.textContent = t('radarHint');
+  mountRadar(data.place);
+}
+
+// ---- Best time today (activity windows) -------------------------------------
+function renderActivity(data, s) {
+  const box = $('#activity');
+  const hours = todayHours(data.forecast.hourly, s.units);
+  if (hours.length < 2) { box.hidden = true; return; }
+
+  const acts = [
+    { icon: '🌳', label: t('actOutdoor'), score: outdoorScore },
+    { icon: '🏃', label: t('actSport'), score: sportScore },
+    { icon: '🧺', label: t('actLaundry'), score: laundryScore },
+  ];
+  const rows = acts.map((a) => {
+    const win = bestWindow(hours, a.score);
+    const val = win ? (win.allDay ? t('actAllDay') : `${win.from}–${win.to} ${getLang() === 'en' ? '' : 'Uhr'}`.trim()) : t('actNone');
+    return `<div class="act-row">
+      <span class="act-ic">${a.icon}</span>
+      <span class="act-label">${a.label}</span>
+      <span class="act-win ${win ? 'ok' : 'no'}">${val}</span>
+    </div>`;
+  }).join('');
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🕒 ${t('activityTitle')}</div><div class="acts">${rows}</div>`;
+}
+
+function todayHours(h, units) {
+  const out = [];
+  if (!h || !h.time) return out;
+  const now = Date.now();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < h.time.length; i++) {
+    const dt = new Date(h.time[i]);
+    if (dt.getTime() < now - 1800000) continue;
+    if (dt.getDate() !== today.getDate() || dt.getMonth() !== today.getMonth()) break;
+    out.push({
+      hour: dt.getHours(),
+      feels: toC(h.apparent_temperature ? h.apparent_temperature[i] : h.temperature_2m[i], units.temp),
+      prob: h.precipitation_probability ? h.precipitation_probability[i] : 0,
+      precip: h.precipitation ? h.precipitation[i] : 0,
+      wind: toKmhU(h.wind_speed_10m ? h.wind_speed_10m[i] : 0, units.wind),
+      hum: h.relative_humidity_2m ? h.relative_humidity_2m[i] : 60,
+      uv: h.uv_index ? h.uv_index[i] : 0,
+      isDay: h.is_day ? h.is_day[i] === 1 : true,
+    });
+  }
+  return out;
+}
+function outdoorScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100;
+  s -= Math.abs(x.feels - 20) * 3.5;
+  s -= x.prob * 0.9;
+  s -= Math.max(0, x.wind - 20) * 1.2;
+  if (x.uv >= 8) s -= 15;
+  return s;
+}
+function sportScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100;
+  s -= Math.abs(x.feels - 14) * 3.5;
+  s -= x.prob * 1.1;
+  s -= Math.max(0, x.wind - 25) * 1.2;
+  if (x.precip > 0.1) s -= 30;
+  return s;
+}
+function laundryScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100;
+  if (x.precip > 0.05 || x.prob > 25) return 0;
+  s -= Math.max(0, x.hum - 55) * 1.4;
+  s += Math.min(20, x.wind);
+  s -= Math.max(0, 12 - x.feels) * 2;
+  return s;
+}
+function bestWindow(hours, scoreFn, threshold = 55) {
+  const good = hours.map((h) => scoreFn(h) >= threshold);
+  if (good.every((g) => g)) return { allDay: true };
+  let best = null, start = -1;
+  for (let i = 0; i <= hours.length; i++) {
+    if (i < hours.length && good[i]) { if (start < 0) start = i; }
+    else if (start >= 0) {
+      const len = i - start;
+      if (!best || len > best.len) best = { start, end: i - 1, len };
+      start = -1;
+    }
+  }
+  if (!best) return null;
+  const from = hours[best.start].hour;
+  const to = (hours[best.end].hour + 1) % 24;
+  return { from: pad2(from), to: pad2(to) };
+}
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+// ---- Bio-weather & health ----------------------------------------------------
+function renderBiowetter(data, s) {
+  const box = $('#biowetter');
+  const c = data.forecast.current;
+  const h = data.forecast.hourly;
+  const idx = currentHourIndex(h);
+
+  // pressure trend over the previous ~3h
+  let trend = t('trendSteady'), trendIcon = '→', delta = 0;
+  if (h.pressure_msl && idx >= 3) {
+    delta = h.pressure_msl[idx] - h.pressure_msl[idx - 3];
+    if (delta > 1.5) { trend = t('trendRising'); trendIcon = '↗'; }
+    else if (delta < -1.5) { trend = t('trendFalling'); trendIcon = '↘'; }
+  }
+  const migraine = Math.abs(delta) >= 4 ? 'lvl-poor' : Math.abs(delta) >= 2.5 ? 'lvl-moderate' : 'lvl-good';
+  const migraineLbl = Math.abs(delta) >= 4 ? t('highLvl') : Math.abs(delta) >= 2.5 ? t('moderateLvl') : t('lowLvl');
+
+  const dew = h.dew_point_2m ? toC(h.dew_point_2m[idx], s.units.temp) : null;
+  const muggy = dew == null ? null : dew >= 18 ? t('highLvl') : dew >= 15 ? t('moderateLvl') : t('lowLvl');
+  const muggyCls = dew == null ? 'lvl-none' : dew >= 18 ? 'lvl-poor' : dew >= 15 ? 'lvl-moderate' : 'lvl-good';
+
+  const feelsC = toC(c.apparent_temperature, s.units.temp);
+  const windKmh = toKmhU(c.wind_speed_10m, s.units.wind);
+  const cold = (feelsC >= 1 && feelsC <= 10 && windKmh >= 15 && c.relative_humidity_2m >= 75);
+  const circ = feelsC >= 30 ? t('highLvl') : feelsC >= 27 ? t('moderateLvl') : (feelsC <= -5 ? t('moderateLvl') : t('lowLvl'));
+  const circCls = feelsC >= 30 ? 'lvl-poor' : feelsC >= 27 ? 'lvl-moderate' : (feelsC <= -5 ? 'lvl-moderate' : 'lvl-good');
+
+  const rows = [
+    bioRow('🌡️', t('pressureTrend'), `${trendIcon} ${trend}`, `${num(delta, 1)} hPa/3h`, ''),
+    bioRow('🤕', t('migraine'), `<span class="badge ${migraine}">${migraineLbl}</span>`, '', ''),
+    bioRow('❤️', t('circulation'), `<span class="badge ${circCls}">${circ}</span>`, '', ''),
+  ];
+  if (muggy) rows.push(bioRow('💦', t('muggy'), `<span class="badge ${muggyCls}">${muggy}</span>`, '', ''));
+  if (cold) rows.push(bioRow('🤧', t('coldRisk'), `<span class="badge lvl-moderate">${t('moderateLvl')}</span>`, '', ''));
+
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🧪 ${t('biowetter')}</div><div class="bio">${rows.join('')}</div>`;
+}
+function bioRow(icon, label, value, sub) {
+  return `<div class="bio-row"><span class="bio-ic">${icon}</span><span class="bio-label">${label}${sub ? ` <i>${sub}</i>` : ''}</span><span class="bio-val">${value}</span></div>`;
+}
+
+// ---- Warnings: official DWD (Bright Sky) with local fallback -----------------
 function renderAlerts(data, s) {
   const box = $('#alerts');
+  const official = data.officialAlerts || [];
+  if (official.length) {
+    box.hidden = false;
+    box.innerHTML = official.slice(0, 4).map((a) => {
+      const sev = sevInfo(a.severity);
+      const head = getLang() === 'en' ? (a.headlineEn || a.eventEn) : (a.headline || a.event);
+      const until = a.expires ? ` · ${t('until')} ${formatTime(a.expires)}` : '';
+      return `<div class="alert sev-${sev.key}">
+        <span class="alert-ic">${sev.icon}</span>
+        <span class="alert-body"><b>${sev.label}</b> ${escapeHtml(head)}<small>${until}</small></span>
+      </div>`;
+    }).join('');
+    return;
+  }
+
+  // Fallback: locally derived advisories
   const c = data.forecast.current;
   const d = data.forecast.daily;
   const alerts = [];
   const gust = c.wind_gusts_10m;
   const uv = d.uv_index_max[0];
   const code = c.weather_code;
-
-  const gustKmh = s.units.wind === 'kmh' ? gust : gust; // already in chosen unit; thresholds tuned for kmh
   if (s.units.wind === 'kmh' && gust >= 60) alerts.push({ icon: '💨', txt: getLang() === 'en' ? `Strong gusts up to ${Math.round(gust)} km/h` : `Sturmböen bis ${Math.round(gust)} km/h` });
   if ([95, 96, 99].includes(code)) alerts.push({ icon: '⛈️', txt: getLang() === 'en' ? 'Thunderstorm risk' : 'Gewittergefahr' });
   if ([56, 57, 66, 67].includes(code)) alerts.push({ icon: '🧊', txt: getLang() === 'en' ? 'Freezing rain – risk of ice' : 'Eisregen – Glättegefahr' });
@@ -84,6 +243,48 @@ function renderAlerts(data, s) {
   box.innerHTML = alerts.map((a) =>
     `<div class="alert"><span class="alert-ic">${a.icon}</span><span>${a.txt}</span></div>`).join('');
 }
+function sevInfo(sev) {
+  switch (sev) {
+    case 'extreme': return { key: 'extreme', icon: '🟣', label: t('sevExtreme') };
+    case 'severe': return { key: 'severe', icon: '🔴', label: t('sevSevere') };
+    case 'moderate': return { key: 'moderate', icon: '🟠', label: t('sevModerate') };
+    default: return { key: 'minor', icon: '🟡', label: t('sevMinor') };
+  }
+}
+
+// ---- Family dashboard --------------------------------------------------------
+export function renderFamily(places, currents, activeId) {
+  const box = $('#family');
+  if (!box) return;
+  if (!places || places.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  const rows = places.map((p, i) => {
+    const w = currents[i];
+    const temp = w ? tempStr(w.temp) : '…';
+    const ic = w ? weatherSVG(w.code, w.isDay) : '';
+    const desc = w ? describe(w.code, getLang()) : '';
+    return `<div class="fam-row${p.id === activeId ? ' active' : ''}" data-i="${i}">
+      <span class="fam-flag">${flagEmoji(p.country_code)}</span>
+      <span class="fam-name">${escapeHtml(p.name)}</span>
+      <span class="fam-ic">${ic}</span>
+      <span class="fam-desc">${desc}</span>
+      <span class="fam-temp">${temp}</span>
+    </div>`;
+  }).join('');
+  box.innerHTML = `<div class="card-title">👪 ${t('family')}</div><div class="fam">${rows}</div>`;
+}
+function flagEmoji(cc) {
+  if (!cc || cc.length !== 2) return '📍';
+  const A = 0x1f1e6;
+  return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
+}
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+// Unit helpers reused by activity/bio calculations
+function toC(v, unit) { return unit === 'F' ? (v - 32) * 5 / 9 : v; }
+function toKmhU(v, unit) { return unit === 'mph' ? v * 1.60934 : unit === 'ms' ? v * 3.6 : v; }
 
 // ---- Rain nowcast (minutely_15) ---------------------------------------------
 function renderNowcast(data) {
