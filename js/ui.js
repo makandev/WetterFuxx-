@@ -3,6 +3,7 @@
 import { t, getLang } from './i18n.js';
 import { describe, weatherSVG } from './weathercodes.js';
 import { buildClothingAdvice } from './advice.js';
+import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
 import {
@@ -19,6 +20,7 @@ export function renderAll(data, settings) {
   renderHeader(data.place);
   renderAlerts(data, settings);
   renderHero(data, settings);
+  renderMoment(data, settings);
   renderClothing(data, settings);
   renderRadar(data);
   renderNowcast(data);
@@ -51,6 +53,16 @@ function renderHero(data, s) {
   $('#heroFeels').textContent = `${t('feelsLike')} ${tempStr(c.apparent_temperature)}`;
   $('#heroHiLo').innerHTML =
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
+}
+
+// ---- Weather moment of the day ----------------------------------------------
+function renderMoment(data, s) {
+  const box = $('#moment');
+  const m = buildMoment(data, s);
+  if (!m) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<div class="mom-emoji" aria-hidden="true">${m.emoji}</div>
+    <div class="mom-text"><b>${m.title}</b><span>${m.text}</span></div>`;
 }
 
 // ---- Clothing tip for today --------------------------------------------------
@@ -340,7 +352,9 @@ export function renderFamily(places, currents, activeId) {
       <span class="fam-temp">${temp}</span>
     </div>`;
   }).join('');
-  box.innerHTML = `<div class="card-title">👪 ${t('family')}</div><div class="fam">${rows}</div>`;
+  box.innerHTML = `<div class="card-title fam-title">👪 ${t('family')}
+    <button class="fam-share" aria-label="${t('share')}">${getLang() === 'en' ? 'Share ↗' : 'Teilen ↗'}</button></div>
+    <div class="fam">${rows}</div>`;
 }
 function flagEmoji(cc) {
   if (!cc || cc.length !== 2) return '📍';

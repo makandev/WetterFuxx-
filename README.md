@@ -19,7 +19,11 @@ Web-App (PWA) auf Handy, Tablet und Desktop.
 | **🌧️ RegenRadar (live)** | Echte Karte, auf der Regenwolken heranziehen – Play/Pause & Zeitleiste (Vergangenheit + Vorhersage) |
 | **Regen-Nowcast** | „Regen in X Minuten“ auf 15-Minuten-Basis (nächste 2 h) |
 | **⚠️ Amtliche Warnungen** | Offizielle **DWD**-Unwetterwarnungen (Sturm, Gewitter, Glätte, Hitze) mit Warnstufen |
-| **👪 Familien-Wetter** | Alle gespeicherten Orte mit Live-Temperatur auf einen Blick – ideal, wenn die Familie verteilt wohnt |
+| **👪 Familien-Wetter** | Alle gespeicherten Orte mit Live-Temperatur auf einen Blick + **ganzes Orte-Set per Link teilen** |
+| **📸 Wetter-Moment** | Ein kuratierter Tages-Hook (Grillwetter, Goldene Stunde, Frostnacht, Hitze …) |
+| **🖼️ Bild teilen** | Erzeugt eine hübsche Wetter-Bildkarte für WhatsApp/Stories (Web-Share) |
+| **🎨 8 Designs** | Aurora, Midnight, Nebula, Forest, Mono, Daylight, Sand, Mist |
+| **🦊 Personalisierung** | Fuchs-Maskottchen im Outfit, Kälteempfinden-Regler, Profile (Kind/Fahrrad) |
 | **🕒 Beste Zeit heute** | Optimale Zeitfenster für Draußensein, Sport/Joggen und Wäschetrocknen |
 | **🧥 Kleidungstipp** | Konkrete Empfehlung aus Temperatur, Regen, Wind, UV, Glätte & Tag/Nacht-Schwankung |
 | **🧪 Biowetter & Gesundheit** | Luftdruck-Tendenz, Kopfschmerz-Reiz, Kreislaufbelastung, Schwüle, Erkältungswetter |
