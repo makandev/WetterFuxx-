@@ -4,6 +4,7 @@ const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const REVERSE = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
+const ALERTS = 'https://api.brightsky.dev/alerts'; // official DWD warnings (DE/AT/…)
 
 async function getJSON(url, params) {
   const u = new URL(url);
@@ -75,7 +76,7 @@ export async function getWeather(place, units = {}) {
     hourly: [
       'temperature_2m', 'apparent_temperature', 'precipitation_probability', 'precipitation',
       'weather_code', 'wind_speed_10m', 'wind_direction_10m', 'is_day',
-      'relative_humidity_2m', 'visibility', 'uv_index',
+      'relative_humidity_2m', 'visibility', 'uv_index', 'pressure_msl', 'dew_point_2m',
     ],
     daily: [
       'weather_code', 'temperature_2m_max', 'temperature_2m_min',
@@ -101,4 +102,44 @@ export async function getWeather(place, units = {}) {
   } catch { /* air quality is optional */ }
 
   return { place, forecast, air, fetchedAt: Date.now() };
+}
+
+// Official DWD severe-weather warnings via Bright Sky (best-effort, DE/AT coverage)
+export async function getAlerts(lat, lon) {
+  try {
+    const data = await getJSON(ALERTS, { lat, lon });
+    return (data.alerts || []).map((a) => ({
+      event: a.event_de || a.event_en || a.event || '',
+      eventEn: a.event_en || a.event_de || '',
+      headline: a.headline_de || a.headline_en || '',
+      headlineEn: a.headline_en || a.headline_de || '',
+      description: a.description_de || a.description_en || '',
+      descriptionEn: a.description_en || a.description_de || '',
+      instruction: a.instruction_de || a.instruction_en || '',
+      severity: (a.severity || 'minor').toLowerCase(),
+      onset: a.onset, expires: a.expires,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Lightweight current conditions for the family dashboard
+export async function getCurrentBrief(place, units = {}) {
+  const tempUnit = units.temp === 'F' ? 'fahrenheit' : 'celsius';
+  try {
+    const d = await getJSON(FORECAST, {
+      latitude: place.lat, longitude: place.lon, timezone: 'auto',
+      temperature_unit: tempUnit,
+      current: ['temperature_2m', 'weather_code', 'is_day', 'apparent_temperature'],
+    });
+    return {
+      temp: d.current.temperature_2m,
+      feels: d.current.apparent_temperature,
+      code: d.current.weather_code,
+      isDay: d.current.is_day === 1,
+    };
+  } catch {
+    return null;
+  }
 }
