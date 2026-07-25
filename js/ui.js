@@ -25,6 +25,7 @@ export function renderAll(data, settings) {
   renderRadar(data);
   renderNowcast(data);
   renderActivity(data, settings);
+  renderActivities(data, settings);
   renderDetails(data, settings);
   renderHourly(data, settings);
   renderAir(data);
@@ -244,6 +245,80 @@ function bestWindow(hours, scoreFn) {
   return { from: pad2(hours[best.start].hour), to: pad2((hours[best.end].hour + 1) % 24), allDay };
 }
 function pad2(n) { return String(n).padStart(2, '0'); }
+
+// ---- Activity / season check ("Heute gut für …") ----------------------------
+function renderActivities(data, s) {
+  const box = $('#activities');
+  const { hours, tomorrow } = pickActivityDay(data.forecast.hourly, s.units);
+  if (hours.length < 2) { box.hidden = true; return; }
+  const d = data.forecast.daily;
+  const u = s.units;
+  const en = getLang() === 'en';
+  const maxFeels = Math.max(...hours.map((h) => h.feels));
+  const SNOW = [71, 73, 75, 77, 85, 86];
+  const snowy = [data.forecast.current.weather_code, d.weather_code[0]].some((c) => SNOW.includes(c));
+  const tmin = toC(d.temperature_2m_min[0], u.temp);
+
+  const defs = [
+    { emoji: '🔥', label: en ? 'Barbecue' : 'Grillen', fn: grillScore, gate: maxFeels >= 16, note: en ? 'too cool' : 'zu kühl' },
+    { emoji: '🚴', label: en ? 'Cycling' : 'Radfahren', fn: bikeScore, gate: true },
+    { emoji: '🏊', label: en ? 'Swimming' : 'Baden', fn: swimScore, gate: maxFeels >= 22, note: en ? 'too cool' : 'zu kühl' },
+    { emoji: '⛷️', label: en ? 'Snow fun' : 'Schnee', fn: skiScore, gate: snowy, note: en ? 'no snow' : 'kein Schnee' },
+    { emoji: '🌱', label: en ? 'Gardening' : 'Garten', fn: gardenScore, gate: tmin > -3 },
+    { emoji: '📸', label: en ? 'Photos' : 'Fotografieren', fn: photoScore, gate: true },
+  ];
+
+  const tiles = defs.map((a) => {
+    if (!a.gate) return activityTile(a.emoji, a.label, 'na', a.note || '—', '');
+    const peak = Math.max(...hours.map(a.fn));
+    const verdict = peak >= 68 ? 'good' : peak >= 45 ? 'ok' : 'bad';
+    const vtext = verdict === 'good' ? (en ? 'great' : 'top') : verdict === 'ok' ? 'okay' : (en ? 'nope' : 'eher nicht');
+    const win = bestWindow(hours, a.fn);
+    const pre = tomorrow ? (en ? 'tmr ' : 'morgen ') : '';
+    const wtxt = verdict === 'bad' ? '' : (win ? (win.allDay ? (en ? 'all day' : 'ganztags') : `${pre}${win.from}–${win.to}`) : '');
+    return activityTile(a.emoji, a.label, verdict, vtext, wtxt);
+  }).join('');
+
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">✅ ${en ? 'Good today for …' : 'Heute gut für …'}</div><div class="act-grid">${tiles}</div>`;
+}
+function activityTile(emoji, label, verdict, vtext, win) {
+  const dot = verdict === 'good' ? '🟢' : verdict === 'ok' ? '🟡' : verdict === 'na' ? '⚪' : '🔴';
+  return `<div class="ag-tile v-${verdict}">
+    <span class="ag-emoji" aria-hidden="true">${emoji}</span>
+    <span class="ag-label">${label}</span>
+    <span class="ag-verdict">${dot} ${vtext}</span>
+    ${win ? `<span class="ag-win">${win}</span>` : ''}
+  </div>`;
+}
+function grillScore(x) {
+  if (x.hour < 11 || x.hour > 22) return 0;
+  let s = 100; s -= Math.abs(x.feels - 24) * 2.6;
+  if (x.precip > 0.05 || x.prob >= 45) s -= 60;
+  s -= Math.max(0, x.gust - 30) * 1.3; return s;
+}
+function bikeScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 16) * 3; s -= rainPenalty(x); s -= Math.max(0, x.gust - 40) * 1.3; return s;
+}
+function swimScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 28) * 3.4;
+  if (x.precip > 0.05 || x.prob >= 40) s -= 45;
+  s -= x.cloud * 0.15; s -= Math.max(0, x.gust - 25) * 1.2; return s;
+}
+function skiScore(x) {
+  let s = 100; s -= Math.abs(x.feels - (-3)) * 2.2; s -= Math.max(0, x.gust - 45) * 1.2; return s;
+}
+function gardenScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 18) * 2.6;
+  if (x.precip > 1) s -= 30; if (x.feels < 2) s -= 40; s -= Math.max(0, x.gust - 45); return s;
+}
+function photoScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100 - x.cloud * 0.7; s -= rainPenalty(x); return s;
+}
 
 // ---- Bio-weather & health ----------------------------------------------------
 function renderBiowetter(data, s) {
