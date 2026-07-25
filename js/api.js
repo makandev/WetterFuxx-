@@ -75,8 +75,8 @@ export async function getWeather(place, units = {}) {
     ],
     hourly: [
       'temperature_2m', 'apparent_temperature', 'precipitation_probability', 'precipitation',
-      'weather_code', 'wind_speed_10m', 'wind_direction_10m', 'is_day',
-      'relative_humidity_2m', 'visibility', 'uv_index', 'pressure_msl', 'dew_point_2m',
+      'weather_code', 'wind_speed_10m', 'wind_gusts_10m', 'wind_direction_10m', 'is_day',
+      'relative_humidity_2m', 'visibility', 'uv_index', 'pressure_msl', 'dew_point_2m', 'cloud_cover',
     ],
     daily: [
       'weather_code', 'temperature_2m_max', 'temperature_2m_min',
