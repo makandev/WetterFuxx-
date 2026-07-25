@@ -210,6 +210,8 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .radar-status { flex-shrink: 0; min-width: 88px; text-align: right; font-size: 13px; font-weight: 600; color: var(--text-dim); }
 .radar-status.forecast { color: var(--accent); }
 .radar-note { font-size: 12px; color: var(--text-faint); margin-top: 8px; }
+.radar-legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--text-faint); }
+.radar-scale { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #7fe0a0, #6aa8ff, #ffd250, #ff9a4d, #ff5e5a, #b45adc); }
 
 /* ---- Family dashboard ---- */
 .fam { display: flex; flex-direction: column; }
@@ -307,38 +309,43 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .compass-n { fill: var(--text-dim); font-size: 8px; text-anchor: middle; font-weight: 700; }
 .compass-needle { fill: #ff8a6b; }
 
-/* ---- Hourly ---- */
+/* ---- Hourly combined chart ---- */
+.hr-legend { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-faint); margin-left: 6px; }
+.hr-legend .lg-line { display: inline-block; width: 12px; height: 2px; background: var(--accent); vertical-align: middle; border-radius: 2px; }
+.hr-legend .lg-bar { display: inline-block; width: 6px; height: 9px; background: #6aa8ff; vertical-align: middle; border-radius: 1px; }
 .hr-scroll { overflow-x: auto; scrollbar-width: thin; margin: 0 -6px; padding: 0 6px; }
 .hr-scroll::-webkit-scrollbar { height: 5px; }
 .hr-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.25); border-radius: 4px; }
 .hr-inner { position: relative; }
-.hr-curve { position: absolute; top: 44px; left: 0; height: 62px; pointer-events: none; }
-.curve-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 2px 6px rgba(255,212,121,.4)); }
 .hr-cols { display: flex; }
-.hr-col { display: flex; flex-direction: column; align-items: center; gap: 4px; padding-top: 0; }
+.hr-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .hr-time { font-size: 12px; color: var(--text-dim); }
-.hr-ic { width: 34px; height: 34px; }
+.hr-ic { width: 32px; height: 32px; }
 .hr-ic svg { width: 100%; height: 100%; }
-.hr-temp { font-size: 15px; font-weight: 600; margin-top: 40px; }
-.hr-pp { font-size: 11px; color: #bcd6ff; height: 14px; }
-.hr-pp.on { color: #8fb8ff; font-weight: 600; }
+.hr-chart { display: block; margin-top: 2px; }
+.hr-night { fill: rgba(10,18,40,0.28); }
+.hr-div { stroke: rgba(255,255,255,0.25); stroke-width: 1; stroke-dasharray: 2 3; }
+.hr-divlbl { fill: var(--text-faint); font-size: 9px; }
+.hr-base { stroke: var(--hairline); stroke-width: 1; }
+.hr-precip { fill: #6aa8ff; opacity: 0.85; }
+.hr-tlabel { fill: var(--text); font-size: 11px; font-weight: 600; text-anchor: middle; }
 
 /* ---- Two column ---- */
 .two-col { display: grid; grid-template-columns: 1fr; gap: 0; }
 .two-col .card { margin-bottom: 14px; }
 @media (min-width: 640px) { .two-col { grid-template-columns: 1fr 1fr; gap: 14px; } }
 
-/* ---- Air quality ---- */
+/* ---- Air quality gauge ---- */
 .aqi-main { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
-.aqi-ring {
-  width: 84px; height: 84px; border-radius: 50%; flex-shrink: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  border: 5px solid currentColor;
-}
-.aqi-ring.lvl-good { color: #52d282; } .aqi-ring.lvl-fair { color: #b4dc5a; }
-.aqi-ring.lvl-moderate { color: #ffd250; } .aqi-ring.lvl-poor { color: #ffa046; }
-.aqi-ring.lvl-verypoor { color: #ff6e5a; } .aqi-ring.lvl-extreme { color: #b45adc; }
-.aqi-val { font-size: 28px; font-weight: 700; color: #fff; }
+.aqi-gaugewrap { position: relative; width: 88px; height: 88px; flex-shrink: 0; }
+.aqi-gauge { width: 88px; height: 88px; }
+.aqi-track { fill: none; stroke: rgba(255,255,255,0.14); stroke-width: 9; }
+.aqi-arc { fill: none; stroke-width: 9; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
+.aqi-arc.lvl-good { stroke: #52d282; } .aqi-arc.lvl-fair { stroke: #b4dc5a; }
+.aqi-arc.lvl-moderate { stroke: #ffd250; } .aqi-arc.lvl-poor { stroke: #ffa046; }
+.aqi-arc.lvl-verypoor { stroke: #ff6e5a; } .aqi-arc.lvl-extreme { stroke: #b45adc; }
+.aqi-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.aqi-val { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; }
 .aqi-lbl { font-size: 10px; color: var(--text-dim); letter-spacing: .1em; }
 .aqi-info { flex: 1; }
 .aqi-info p { font-size: 13px; color: var(--text-dim); margin-top: 8px; }
@@ -353,7 +360,8 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 /* ---- Sun & Moon ---- */
 .sun-arc { margin-bottom: 4px; }
 .arc-svg { width: 100%; height: auto; overflow: visible; }
-.arc-path { fill: none; stroke: rgba(255,255,255,0.3); stroke-width: 2; stroke-dasharray: 3 5; }
+.arc-path { fill: none; stroke: rgba(255,255,255,0.28); stroke-width: 2; stroke-dasharray: 3 5; }
+.arc-progress { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(255,212,121,.5)); transition: stroke-dasharray .6s ease; }
 .arc-sun { fill: var(--accent); filter: drop-shadow(0 0 10px rgba(255,212,121,.9)); }
 .sun-times { display: flex; justify-content: space-between; margin-top: 2px; }
 .sun-times .lbl, .lbl { display: block; font-size: 11px; color: var(--text-faint); }

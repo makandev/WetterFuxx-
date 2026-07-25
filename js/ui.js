@@ -430,49 +430,98 @@ function compass(deg) {
     </g></svg>`;
 }
 
-// ---- Hourly (48h) ------------------------------------------------------------
+// ---- Hourly (48h) — combined chart: temp area + precip bars + day/night ------
 function renderHourly(data, s) {
   const h = data.forecast.hourly;
   const start = currentHourIndex(h);
   const N = 48;
   const idxs = [];
   for (let i = start; i < Math.min(start + N, h.time.length); i++) idxs.push(i);
+  if (!idxs.length) { $('#hourly').innerHTML = ''; return; }
   const temps = idxs.map((i) => h.temperature_2m[i]);
   const min = Math.min(...temps), max = Math.max(...temps);
   const range = Math.max(1, max - min);
 
-  // temperature curve as svg polyline overlaid — build points relative to columns
-  const colW = 62, chartH = 46;
-  const points = temps.map((tp, i) => {
-    const x = i * colW + colW / 2;
-    const y = 8 + (1 - (tp - min) / range) * chartH;
-    return `${x},${y.toFixed(1)}`;
-  }).join(' ');
+  const colW = 58, topPad = 20, chartH = 62, precipH = 20;
+  const baseY = topPad + chartH;
+  const totalH = baseY + precipH;
+  const width = idxs.length * colW;
+
+  const pts = temps.map((tp, k) => [k * colW + colW / 2, topPad + (1 - (tp - min) / range) * chartH]);
+  const linePath = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1].toFixed(1)}`).join(' ');
+  const areaPath = `${linePath} L ${pts[pts.length - 1][0]} ${baseY} L ${pts[0][0]} ${baseY} Z`;
+
+  // Temperature-coloured gradient along the x-axis (userSpaceOnUse)
+  const gid = 'hrGrad';
+  const stops = temps.map((tp, k) =>
+    `<stop offset="${((k / Math.max(1, temps.length - 1)) * 100).toFixed(2)}%" stop-color="${tempColor(toC(tp, s.units.temp))}"/>`).join('');
+
+  let night = '', bars = '', labels = '', dividers = '';
+  idxs.forEach((i, k) => {
+    const x = k * colW;
+    const isDay = h.is_day ? h.is_day[i] === 1 : true;
+    if (!isDay) night += `<rect x="${x}" y="0" width="${colW}" height="${totalH}" class="hr-night"/>`;
+    // sunrise/sunset divider when day/night flips
+    if (k > 0) {
+      const prevDay = h.is_day ? h.is_day[idxs[k - 1]] === 1 : true;
+      if (prevDay !== isDay) dividers += `<line x1="${x}" y1="0" x2="${x}" y2="${baseY}" class="hr-div"/><text x="${x + 3}" y="12" class="hr-divlbl">${isDay ? '☀' : '☾'}</text>`;
+    }
+    const pp = h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0;
+    if (pp > 0) {
+      const bh = Math.max(1.5, (pp / 100) * precipH);
+      bars += `<rect x="${x + colW * 0.3}" y="${(baseY + precipH - bh).toFixed(1)}" width="${colW * 0.4}" height="${bh.toFixed(1)}" rx="1.5" class="hr-precip"/>`;
+    }
+    labels += `<text x="${pts[k][0]}" y="${(pts[k][1] - 6).toFixed(1)}" class="hr-tlabel">${Math.round(temps[k])}°</text>`;
+  });
 
   const cols = idxs.map((i, k) => {
     const isDay = h.is_day ? h.is_day[i] === 1 : true;
-    const pp = h.precipitation_probability ? h.precipitation_probability[i] : null;
     const label = k === 0 ? t('now') : formatHour(h.time[i]);
     return `<div class="hr-col" style="width:${colW}px">
       <span class="hr-time">${label}</span>
       <span class="hr-ic">${weatherSVG(h.weather_code[i], isDay)}</span>
-      <span class="hr-temp">${tempStr(h.temperature_2m[i])}</span>
-      <span class="hr-pp ${pp >= 30 ? 'on' : ''}">${pp != null && pp > 0 ? `💧${pp}%` : ''}</span>
     </div>`;
   }).join('');
 
-  const width = idxs.length * colW;
   $('#hourly').innerHTML = `
-    <div class="card-title">${t('hourly')}</div>
+    <div class="card-title">${t('hourly')} <span class="hr-legend">🌡️ <i class="lg-line"></i> ${getLang() === 'en' ? 'temp' : 'Temp.'} · 💧 <i class="lg-bar"></i> ${t('precipProb')}</span></div>
     <div class="hr-scroll">
       <div class="hr-inner" style="width:${width}px">
-        <svg class="hr-curve" viewBox="0 0 ${width} 62" preserveAspectRatio="none" style="width:${width}px">
-          <polyline points="${points}" class="curve-line"/>
-        </svg>
         <div class="hr-cols">${cols}</div>
+        <svg class="hr-chart" viewBox="0 0 ${width} ${totalH}" width="${width}" height="${totalH}" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="${width}" y2="0">${stops}</linearGradient>
+            <linearGradient id="${gid}Fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.35"/>
+              <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.02"/>
+            </linearGradient>
+          </defs>
+          ${night}${dividers}
+          <line x1="0" y1="${baseY}" x2="${width}" y2="${baseY}" class="hr-base"/>
+          <path d="${areaPath}" fill="url(#${gid}Fill)"/>
+          <path d="${linePath}" fill="none" stroke="url(#${gid})" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+          ${labels}${bars}
+        </svg>
       </div>
     </div>`;
 }
+
+// Temperature → colour ramp (°C), shared across charts
+function tempColor(c) {
+  const stops = [[-12, [74, 127, 216]], [-2, [95, 176, 232]], [8, [87, 199, 133]],
+    [16, [255, 210, 80]], [24, [255, 154, 77]], [34, [255, 94, 90]]];
+  if (c <= stops[0][0]) return rgb(stops[0][1]);
+  if (c >= stops[stops.length - 1][0]) return rgb(stops[stops.length - 1][1]);
+  for (let i = 1; i < stops.length; i++) {
+    if (c <= stops[i][0]) {
+      const [a, ca] = stops[i - 1], [b, cb] = stops[i];
+      const f = (c - a) / (b - a);
+      return rgb(ca.map((v, j) => Math.round(v + (cb[j] - v) * f)));
+    }
+  }
+  return rgb(stops[stops.length - 1][1]);
+}
+function rgb(a) { return `rgb(${a[0]},${a[1]},${a[2]})`; }
 
 // ---- Air quality + pollen ----------------------------------------------------
 function renderAir(data) {
@@ -504,12 +553,17 @@ function renderAir(data) {
     if (rows.length) pollenHtml = `<div class="pollen"><div class="sub-title">🌸 ${t('pollen')}</div>${rows.join('')}</div>`;
   }
 
+  const frac = Math.max(0, Math.min(1, a.european_aqi / 100));
   box.innerHTML = `
     <div class="card-title">🍃 ${t('airQuality')}</div>
     <div class="aqi-main">
-      <div class="aqi-ring ${lvl.cls}">
-        <span class="aqi-val">${Math.round(a.european_aqi)}</span>
-        <span class="aqi-lbl">AQI</span>
+      <div class="aqi-gaugewrap">
+        <svg class="aqi-gauge" viewBox="0 0 100 100" aria-hidden="true">
+          <circle class="aqi-track" cx="50" cy="50" r="42"/>
+          <circle class="aqi-arc ${lvl.cls}" cx="50" cy="50" r="42" pathLength="100"
+            style="stroke-dasharray:${(frac * 100).toFixed(1)} 100" transform="rotate(-90 50 50)"/>
+        </svg>
+        <div class="aqi-center"><span class="aqi-val">${Math.round(a.european_aqi)}</span><span class="aqi-lbl">AQI</span></div>
       </div>
       <div class="aqi-info">
         <div class="badge ${lvl.cls}">${lvl.label}</div>
@@ -552,6 +606,7 @@ function renderSunMoon(data) {
     <div class="sun-arc">
       <svg viewBox="0 0 ${arcW} ${arcH}" class="arc-svg">
         <path d="M12 ${arcH - 6} A ${arcW / 2 - 12} ${arcH - 14} 0 0 1 ${arcW - 12} ${arcH - 6}" class="arc-path"/>
+        <path d="M12 ${arcH - 6} A ${arcW / 2 - 12} ${arcH - 14} 0 0 1 ${arcW - 12} ${arcH - 6}" class="arc-progress" pathLength="100" style="stroke-dasharray:${(prog * 100).toFixed(1)} 100"/>
         ${prog > 0 && prog < 1 ? `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="7" class="arc-sun"/>` : ''}
       </svg>
       <div class="sun-times">
@@ -586,7 +641,7 @@ function renderDaily(data, s) {
         <span class="day-ic" role="img" aria-label="${describe(d.weather_code[i], getLang())}">${weatherSVG(d.weather_code[i], true)}</span>
         <span class="day-pp">${pp ? `💧${pp}%` : ''}</span>
         <span class="day-lo">${tempStr(lo)}</span>
-        <span class="day-bar"><span class="day-fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
+        <span class="day-bar"><span class="day-fill" style="left:${left}%;width:${Math.max(6, width)}%;background:linear-gradient(90deg, ${tempColor(toC(lo, s.units.temp))}, ${tempColor(toC(hi, s.units.temp))})"></span></span>
         <span class="day-hi">${tempStr(hi)}</span>
         <span class="day-chev" aria-hidden="true">⌄</span>
       </button>
