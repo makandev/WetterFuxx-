@@ -18,6 +18,8 @@ let playing = false;
 let timer = null;
 let inited = false;
 let pending = null;
+let firstLoad = true;
+let refreshTimer = null;
 
 // Public: ensure the radar is initialised for a place (lazy — waits for visibility)
 export function mountRadar(place) {
@@ -57,8 +59,12 @@ function init(place) {
 
   wireControls();
   loadFrames();
-  // refresh radar data every 5 minutes while the page is open
-  setInterval(loadFrames, 5 * 60 * 1000);
+  // refresh radar data every 5 minutes while the page is visible
+  refreshTimer = setInterval(() => { if (!document.hidden) loadFrames(); }, 5 * 60 * 1000);
+  // pause animation when the tab is hidden (saves battery/CPU)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopPlay();
+  });
 }
 
 function pinIcon(L) {
@@ -94,7 +100,7 @@ async function loadFrames() {
     if (slider) { slider.max = String(frames.length - 1); slider.value = String(activeIdx); }
     showFrame(activeIdx);
     updateStatus();
-    if (!playing) startPlay(); // auto-play the loop
+    if (firstLoad && !document.hidden) { firstLoad = false; startPlay(); } // auto-play once
   } catch (e) {
     const status = document.getElementById('radar-status');
     if (status) status.textContent = getLang() === 'en' ? 'Radar unavailable' : 'Radar nicht verfügbar';
@@ -140,7 +146,7 @@ function updateStatus() {
 function startPlay() {
   playing = true;
   const btn = document.getElementById('radar-play');
-  if (btn) btn.textContent = '⏸';
+  if (btn) { btn.textContent = '⏸'; btn.setAttribute('aria-pressed', 'true'); }
   clearInterval(timer);
   timer = setInterval(() => {
     let next = activeIdx + 1;
@@ -151,7 +157,7 @@ function startPlay() {
 function stopPlay() {
   playing = false;
   const btn = document.getElementById('radar-play');
-  if (btn) btn.textContent = '▶';
+  if (btn) { btn.textContent = '▶'; btn.setAttribute('aria-pressed', 'false'); }
   clearInterval(timer);
 }
 function togglePlay() { playing ? stopPlay() : startPlay(); }
