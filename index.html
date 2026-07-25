@@ -48,7 +48,7 @@
     </section>
 
     <!-- Alerts -->
-    <section id="alerts" class="alerts" hidden></section>
+    <section id="alerts" class="alerts" role="region" aria-live="polite" aria-label="Wetterwarnungen" hidden></section>
 
     <!-- Hero / current -->
     <section class="hero card">
@@ -72,7 +72,7 @@
       <div class="card-title">🌧️ <span id="radarTitle">RegenRadar (live)</span></div>
       <div id="radar-map" class="radar-map"></div>
       <div class="radar-controls">
-        <button id="radar-play" class="radar-btn" aria-label="Play/Pause">▶</button>
+        <button id="radar-play" class="radar-btn" aria-label="Abspielen/Pause" aria-pressed="false">▶</button>
         <input id="radar-slider" type="range" min="0" max="0" value="0" class="radar-slider" aria-label="Zeitleiste" />
         <span id="radar-status" class="radar-status">…</span>
       </div>
@@ -128,7 +128,7 @@
     <div class="overlay-card">
       <div class="search-bar">
         <span class="search-ic">🔍</span>
-        <input id="searchInput" type="search" autocomplete="off" placeholder="Ort suchen …" />
+        <input id="searchInput" type="search" autocomplete="off" aria-label="Ort suchen" placeholder="Ort suchen …" />
         <button id="searchClose" class="icon-btn" aria-label="Schließen">✕</button>
       </div>
       <div id="searchResults" class="search-results"></div>
@@ -168,8 +168,18 @@
         <span>🎨 Design</span>
         <select data-set="theme">
           <option value="auto">Automatisch</option>
-          <option value="light">Hell</option>
-          <option value="dark">Dunkel</option>
+          <optgroup label="Dunkel">
+            <option value="aurora">Aurora</option>
+            <option value="midnight">Midnight</option>
+            <option value="nebula">Nebula</option>
+            <option value="forest">Forest</option>
+            <option value="mono">Mono</option>
+          </optgroup>
+          <optgroup label="Hell">
+            <option value="daylight">Daylight</option>
+            <option value="sand">Sand</option>
+            <option value="mist">Mist</option>
+          </optgroup>
         </select>
       </label>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>

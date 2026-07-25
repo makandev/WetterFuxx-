@@ -7,12 +7,14 @@ import { mountRadar } from './radar.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
+  setPlaceTz, parseLocal, placeNowMs, shortDate, isWeekend,
 } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
 
 export function renderAll(data, settings) {
   const c = data.forecast.current;
+  setPlaceTz(data.forecast.utc_offset_seconds);
   renderHeader(data.place);
   renderAlerts(data, settings);
   renderHero(data, settings);
@@ -56,12 +58,26 @@ function renderClothing(data, s) {
   const a = buildClothingAdvice(data, s);
   const chips = a.items.map((it) =>
     `<span class="cloth-item"><span class="cloth-emoji">${it.emoji}</span>${it.text}</span>`).join('');
+  const slots = a.slots.length ? `<div class="cloth-slots">${a.slots.map((sl) => `
+    <div class="cloth-slot">
+      <span class="cs-label">${sl.label}</span>
+      <span class="cs-ic">${weatherSVG(sl.code, true)}</span>
+      <span class="cs-temp">${tempStr(sl.temp)}</span>
+    </div>`).join('')}</div>` : '';
+  const umbrella = `<span class="cloth-umb ${a.umbrella ? 'yes' : 'no'}">☂️ ${a.umbrella
+    ? (getLang() === 'en' ? 'Umbrella: yes' : 'Schirm: ja')
+    : (getLang() === 'en' ? 'Umbrella: no' : 'Schirm: nein')}</span>`;
   box.innerHTML = `
     <div class="card-title">🧥 ${t('clothing')}</div>
     <div class="cloth-head">
-      <span class="cloth-big">${a.emoji}</span>
-      <span class="cloth-title">${a.title}</span>
+      <span class="cloth-big" aria-hidden="true">${a.emoji}</span>
+      <div class="cloth-headtext">
+        <span class="cloth-title">${a.title}</span>
+        <span class="cloth-summary">${a.summary}</span>
+      </div>
     </div>
+    <div class="cloth-meta">${umbrella}</div>
+    ${slots}
     <div class="cloth-items">${chips}</div>
     ${a.note ? `<div class="cloth-note">💡 ${a.note}</div>` : ''}`;
 }
@@ -76,92 +92,134 @@ function renderRadar(data) {
 // ---- Best time today (activity windows) -------------------------------------
 function renderActivity(data, s) {
   const box = $('#activity');
-  const hours = todayHours(data.forecast.hourly, s.units);
+  const { hours, tomorrow } = pickActivityDay(data.forecast.hourly, s.units);
   if (hours.length < 2) { box.hidden = true; return; }
+  const pre = tomorrow ? (getLang() === 'en' ? 'tomorrow ' : 'morgen ') : '';
 
   const acts = [
-    { icon: '🌳', label: t('actOutdoor'), score: outdoorScore },
-    { icon: '🏃', label: t('actSport'), score: sportScore },
-    { icon: '🧺', label: t('actLaundry'), score: laundryScore },
+    { icon: '🌳', label: t('actOutdoor'), fn: outdoorScore },
+    { icon: '🏃', label: t('actSport'), fn: sportScore },
+    { icon: '🧺', label: t('actLaundry'), fn: laundryScore },
   ];
   const rows = acts.map((a) => {
-    const win = bestWindow(hours, a.score);
-    const val = win ? (win.allDay ? t('actAllDay') : `${win.from}–${win.to} ${getLang() === 'en' ? '' : 'Uhr'}`.trim()) : t('actNone');
+    const win = bestWindow(hours, a.fn);
+    let val, cls;
+    if (!win) { val = t('actNone'); cls = 'no'; }
+    else if (win.allDay) { val = `${pre}${t('actAllDay')}`; cls = 'ok'; }
+    else { val = `${pre}${win.from}–${win.to}${getLang() === 'en' ? '' : ' Uhr'}`; cls = 'ok'; }
     return `<div class="act-row">
-      <span class="act-ic">${a.icon}</span>
-      <span class="act-label">${a.label}</span>
-      <span class="act-win ${win ? 'ok' : 'no'}">${val}</span>
+      <span class="act-ic" aria-hidden="true">${a.icon}</span>
+      <span class="act-main"><span class="act-label">${a.label}</span>${activitySpark(hours, a.fn)}</span>
+      <span class="act-win ${cls}">${val}</span>
     </div>`;
   }).join('');
+  const title = tomorrow
+    ? (getLang() === 'en' ? 'Best time tomorrow' : 'Beste Zeit morgen')
+    : t('activityTitle');
   box.hidden = false;
-  box.innerHTML = `<div class="card-title">🕒 ${t('activityTitle')}</div><div class="acts">${rows}</div>`;
+  box.innerHTML = `<div class="card-title">🕒 ${title}</div><div class="acts">${rows}</div>`;
+}
+function activitySpark(hours, fn) {
+  const bars = hours.map((h) => {
+    const sc = Math.max(0, Math.min(100, fn(h)));
+    const lvl = sc >= 70 ? 'g' : sc >= 45 ? 'm' : 'b';
+    return `<i class="sp ${lvl}" style="height:${(4 + sc * 0.16).toFixed(1)}px"></i>`;
+  }).join('');
+  return `<span class="act-spark" aria-hidden="true">${bars}</span>`;
 }
 
-function todayHours(h, units) {
+// Build hourly rows for a given day offset (0 = today, 1 = tomorrow).
+// fromNow limits today to the hours still ahead.
+function dayHoursOf(h, units, dayOffset, fromNow) {
   const out = [];
   if (!h || !h.time) return out;
-  const now = Date.now();
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const now = placeNowMs();
+  const target = new Date(now + dayOffset * 86400000);
+  const td = target.getUTCDate(), tm = target.getUTCMonth();
+  const precipUnit = units.temp === 'F' ? 'inch' : 'mm';
   for (let i = 0; i < h.time.length; i++) {
-    const dt = new Date(h.time[i]);
-    if (dt.getTime() < now - 1800000) continue;
-    if (dt.getDate() !== today.getDate() || dt.getMonth() !== today.getMonth()) break;
+    const dt = parseLocal(h.time[i]);
+    if (!dt) continue;
+    if (dt.getUTCDate() !== td || dt.getUTCMonth() !== tm) continue;
+    if (fromNow && dt.getTime() < now - 1800000) continue;
     out.push({
-      hour: dt.getHours(),
+      hour: dt.getUTCHours(),
       feels: toC(h.apparent_temperature ? h.apparent_temperature[i] : h.temperature_2m[i], units.temp),
-      prob: h.precipitation_probability ? h.precipitation_probability[i] : 0,
-      precip: h.precipitation ? h.precipitation[i] : 0,
+      prob: h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0,
+      precip: toMmU(h.precipitation ? (h.precipitation[i] || 0) : 0, precipUnit),
       wind: toKmhU(h.wind_speed_10m ? h.wind_speed_10m[i] : 0, units.wind),
+      gust: toKmhU(h.wind_gusts_10m ? h.wind_gusts_10m[i] : 0, units.wind),
       hum: h.relative_humidity_2m ? h.relative_humidity_2m[i] : 60,
-      uv: h.uv_index ? h.uv_index[i] : 0,
+      cloud: h.cloud_cover ? h.cloud_cover[i] : 50,
+      uv: h.uv_index ? (h.uv_index[i] || 0) : 0,
       isDay: h.is_day ? h.is_day[i] === 1 : true,
     });
   }
   return out;
 }
+// Pick today's remaining hours, or tomorrow if the day is essentially over
+function pickActivityDay(h, units) {
+  const today = dayHoursOf(h, units, 0, true);
+  if (today.filter((x) => x.isDay).length >= 2) return { hours: today, tomorrow: false };
+  const tom = dayHoursOf(h, units, 1, false);
+  if (tom.filter((x) => x.isDay).length >= 2) return { hours: tom, tomorrow: true };
+  return { hours: today, tomorrow: false };
+}
+// Rain penalty: probability matters only when meaningful amounts are expected
+function rainPenalty(x) {
+  if (x.prob >= 50 && x.precip > 0.2) return Math.min(45, x.prob * 0.5 + x.precip * 15);
+  if (x.precip > 0.5) return 30;
+  return 0;
+}
 function outdoorScore(x) {
   if (!x.isDay) return 0;
   let s = 100;
-  s -= Math.abs(x.feels - 20) * 3.5;
-  s -= x.prob * 0.9;
-  s -= Math.max(0, x.wind - 20) * 1.2;
-  if (x.uv >= 8) s -= 15;
+  s -= Math.abs(x.feels - 20) * 3.2;
+  s -= rainPenalty(x);
+  s -= Math.max(0, x.gust - 30) * 0.9;   // gusts noticeable above ~30 km/h
+  if (x.uv >= 8) s -= 15; else if (x.uv >= 6) s -= 7;
   return s;
 }
 function sportScore(x) {
   if (!x.isDay) return 0;
   let s = 100;
-  s -= Math.abs(x.feels - 14) * 3.5;
-  s -= x.prob * 1.1;
-  s -= Math.max(0, x.wind - 25) * 1.2;
-  if (x.precip > 0.1) s -= 30;
+  s -= Math.abs(x.feels - 14) * 3.2;
+  if (x.precip > 0.1 || x.prob >= 60) s -= 35;
+  s -= Math.max(0, x.gust - 25) * 1.0;
+  if (x.feels >= 26) s -= 15;
   return s;
 }
 function laundryScore(x) {
   if (!x.isDay) return 0;
-  let s = 100;
-  if (x.precip > 0.05 || x.prob > 25) return 0;
-  s -= Math.max(0, x.hum - 55) * 1.4;
-  s += Math.min(20, x.wind);
-  s -= Math.max(0, 12 - x.feels) * 2;
+  if (x.precip > 0.05 || x.prob > 30) return 0; // must stay dry
+  let s = 55;
+  s += Math.max(0, 100 - x.cloud) * 0.25;       // sunshine dries best
+  s += Math.min(20, x.wind);                     // a breeze helps
+  s -= Math.max(0, x.hum - 55) * 1.1;            // humid air dries poorly
+  s -= Math.max(0, 12 - x.feels) * 2;            // warmth helps
   return s;
 }
-function bestWindow(hours, scoreFn, threshold = 55) {
-  const good = hours.map((h) => scoreFn(h) >= threshold);
-  if (good.every((g) => g)) return { allDay: true };
+// Choose the window with the highest total score (not merely the longest)
+function bestWindow(hours, scoreFn) {
+  const scores = hours.map(scoreFn);
+  const peak = Math.max(...scores);
+  if (peak < 45) return null;
+  const thr = Math.max(50, peak - 20);
   let best = null, start = -1;
   for (let i = 0; i <= hours.length; i++) {
-    if (i < hours.length && good[i]) { if (start < 0) start = i; }
+    const ok = i < hours.length && scores[i] >= thr;
+    if (ok) { if (start < 0) start = i; }
     else if (start >= 0) {
-      const len = i - start;
-      if (!best || len > best.len) best = { start, end: i - 1, len };
+      let sum = 0; for (let k = start; k <= i - 1; k++) sum += scores[k];
+      const seg = { start, end: i - 1, sum };
+      if (!best || seg.sum > best.sum) best = seg;
       start = -1;
     }
   }
   if (!best) return null;
-  const from = hours[best.start].hour;
-  const to = (hours[best.end].hour + 1) % 24;
-  return { from: pad2(from), to: pad2(to) };
+  const daylight = hours.filter((h) => h.isDay).length;
+  const allDay = (best.end - best.start + 1) >= Math.max(6, daylight - 1);
+  return { from: pad2(hours[best.start].hour), to: pad2((hours[best.end].hour + 1) % 24), allDay };
 }
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -230,9 +288,10 @@ function renderAlerts(data, s) {
   const d = data.forecast.daily;
   const alerts = [];
   const gust = c.wind_gusts_10m;
-  const uv = d.uv_index_max[0];
+  const gustKmh = toKmhU(gust, s.units.wind);
+  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
   const code = c.weather_code;
-  if (s.units.wind === 'kmh' && gust >= 60) alerts.push({ icon: '💨', txt: getLang() === 'en' ? `Strong gusts up to ${Math.round(gust)} km/h` : `Sturmböen bis ${Math.round(gust)} km/h` });
+  if (gustKmh >= 60) alerts.push({ icon: '💨', txt: getLang() === 'en' ? `Strong gusts up to ${Math.round(gust)} ${windUnitLabel(s.units.wind)}` : `Kräftige Böen bis ${Math.round(gust)} ${windUnitLabel(s.units.wind)}` });
   if ([95, 96, 99].includes(code)) alerts.push({ icon: '⛈️', txt: getLang() === 'en' ? 'Thunderstorm risk' : 'Gewittergefahr' });
   if ([56, 57, 66, 67].includes(code)) alerts.push({ icon: '🧊', txt: getLang() === 'en' ? 'Freezing rain – risk of ice' : 'Eisregen – Glättegefahr' });
   if ([75, 86].includes(code)) alerts.push({ icon: '❄️', txt: getLang() === 'en' ? 'Heavy snowfall' : 'Starker Schneefall' });
@@ -263,10 +322,10 @@ export function renderFamily(places, currents, activeId) {
     const temp = w ? tempStr(w.temp) : '…';
     const ic = w ? weatherSVG(w.code, w.isDay) : '';
     const desc = w ? describe(w.code, getLang()) : '';
-    return `<div class="fam-row${p.id === activeId ? ' active' : ''}" data-i="${i}">
-      <span class="fam-flag">${flagEmoji(p.country_code)}</span>
+    return `<div class="fam-row${p.id === activeId ? ' active' : ''}" data-i="${i}" role="button" tabindex="0" aria-label="${escapeHtml(p.name)}: ${temp} ${desc}">
+      <span class="fam-flag" aria-hidden="true">${flagEmoji(p.country_code)}</span>
       <span class="fam-name">${escapeHtml(p.name)}</span>
-      <span class="fam-ic">${ic}</span>
+      <span class="fam-ic" aria-hidden="true">${ic}</span>
       <span class="fam-desc">${desc}</span>
       <span class="fam-temp">${temp}</span>
     </div>`;
@@ -278,22 +337,23 @@ function flagEmoji(cc) {
   const A = 0x1f1e6;
   return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
 }
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return String(str).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 
 // Unit helpers reused by activity/bio calculations
 function toC(v, unit) { return unit === 'F' ? (v - 32) * 5 / 9 : v; }
 function toKmhU(v, unit) { return unit === 'mph' ? v * 1.60934 : unit === 'ms' ? v * 3.6 : v; }
+function toMmU(v, unit) { return unit === 'inch' ? v * 25.4 : v; }
 
 // ---- Rain nowcast (minutely_15) ---------------------------------------------
 function renderNowcast(data) {
   const box = $('#nowcast');
   const m = data.forecast.minutely_15;
-  if (!m || !m.time) { box.hidden = true; return; }
-  const now = Date.now();
+  if (!m || !m.time || !m.precipitation) { box.hidden = true; return; }
+  const now = placeNowMs();
   // next 8 slots = 2 hours
-  let start = m.time.findIndex((iso) => new Date(iso).getTime() >= now);
+  let start = m.time.findIndex((iso) => { const d = parseLocal(iso); return d && d.getTime() >= now; });
   if (start < 0) start = 0;
   const times = m.time.slice(start, start + 8);
   const precip = m.precipitation.slice(start, start + 8);
@@ -333,8 +393,8 @@ function renderDetails(data, s) {
   const h = data.forecast.hourly;
   const idx = currentHourIndex(h);
   const vis = h.visibility ? h.visibility[idx] : null;
-  const uv = d.uv_index_max[0];
-  const uvL = uvLevel(uv || 0);
+  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
+  const uvL = uvLevel(uv);
   const dew = dewPoint(c.temperature_2m, c.relative_humidity_2m, s.units.temp);
 
   const tiles = [
@@ -464,10 +524,22 @@ function renderAir(data) {
 function renderSunMoon(data) {
   const d = data.forecast.daily;
   const sr = d.sunrise[0], ss = d.sunset[0];
-  const now = Date.now();
-  const srT = new Date(sr).getTime(), ssT = new Date(ss).getTime();
-  const prog = Math.max(0, Math.min(1, (now - srT) / (ssT - srT)));
   const moon = moonPhase(new Date());
+  const srD = parseLocal(sr), ssD = parseLocal(ss);
+  // Polar day / night: sunrise or sunset missing
+  if (!srD || !ssD) {
+    const polar = (d.daylight_duration && d.daylight_duration[0] > 43200)
+      ? (getLang() === 'en' ? 'Polar day – the sun stays up' : 'Polartag – die Sonne bleibt oben')
+      : (getLang() === 'en' ? 'Polar night – the sun stays down' : 'Polarnacht – die Sonne bleibt unten');
+    $('#sunmoon').innerHTML = `<div class="card-title">☀️ ${t('sunMoon')}</div>
+      <p class="polar-note">🌍 ${polar}</p>
+      <div class="moon-row"><span class="moon-emoji">${moon.emoji}</span>
+      <div><b>${moon.name}</b><span class="lbl">${t('moonPhase')} · ${moon.illum}%</span></div></div>`;
+    return;
+  }
+  const now = placeNowMs();
+  const srT = srD.getTime(), ssT = ssD.getTime();
+  const prog = Math.max(0, Math.min(1, (now - srT) / (ssT - srT)));
 
   // sun arc
   const arcW = 260, arcH = 90;
@@ -507,24 +579,82 @@ function renderDaily(data, s) {
     const left = ((lo - gMin) / gRange) * 100;
     const width = ((hi - lo) / gRange) * 100;
     const pp = d.precipitation_probability_max ? d.precipitation_probability_max[i] : null;
-    return `<div class="day-row">
-      <span class="day-name">${dayLabel(iso, i)}</span>
-      <span class="day-ic">${weatherSVG(d.weather_code[i], true)}</span>
-      <span class="day-pp">${pp ? `💧${pp}%` : ''}</span>
-      <span class="day-lo">${tempStr(lo)}</span>
-      <span class="day-bar"><span class="day-fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
-      <span class="day-hi">${tempStr(hi)}</span>
+    const we = isWeekend(iso) ? ' weekend' : '';
+    return `<div class="day-group">
+      <button class="day-row${we}" data-day="${i}" aria-expanded="false">
+        <span class="day-name">${dayLabel(iso, i)}<small class="day-date">${shortDate(iso)}</small></span>
+        <span class="day-ic" role="img" aria-label="${describe(d.weather_code[i], getLang())}">${weatherSVG(d.weather_code[i], true)}</span>
+        <span class="day-pp">${pp ? `💧${pp}%` : ''}</span>
+        <span class="day-lo">${tempStr(lo)}</span>
+        <span class="day-bar"><span class="day-fill" style="left:${left}%;width:${Math.max(6, width)}%"></span></span>
+        <span class="day-hi">${tempStr(hi)}</span>
+        <span class="day-chev" aria-hidden="true">⌄</span>
+      </button>
+      <div class="day-detail" data-detail="${i}" hidden></div>
     </div>`;
   }).join('');
 
   $('#daily').innerHTML = `<div class="card-title">${t('daily')}</div><div class="days">${rows}</div>`;
+
+  // Tap a day to expand its hourly detail (built lazily)
+  $('#daily').querySelectorAll('.day-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const i = +btn.dataset.day;
+      const panel = $(`#daily [data-detail="${i}"]`);
+      const open = !panel.hidden;
+      if (open) { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); btn.classList.remove('open'); return; }
+      if (!panel.dataset.built) { panel.innerHTML = buildDayDetail(data, i, s); panel.dataset.built = '1'; }
+      panel.hidden = false; btn.setAttribute('aria-expanded', 'true'); btn.classList.add('open');
+    });
+  });
+}
+
+function buildDayDetail(data, dayIdx, s) {
+  const d = data.forecast.daily;
+  const h = data.forecast.hourly;
+  const dayIso = d.time[dayIdx];
+  const target = parseLocal(dayIso);
+  const td = target ? target.getUTCDate() : -1;
+  const tm = target ? target.getUTCMonth() : -1;
+  const idxs = [];
+  for (let i = 0; i < h.time.length; i++) {
+    const dt = parseLocal(h.time[i]);
+    if (dt && dt.getUTCDate() === td && dt.getUTCMonth() === tm && dt.getUTCHours() % 2 === 0) idxs.push(i);
+  }
+  const cols = idxs.map((i) => {
+    const dt = parseLocal(h.time[i]);
+    const isDay = h.is_day ? h.is_day[i] === 1 : true;
+    const pp = h.precipitation_probability ? h.precipitation_probability[i] : 0;
+    return `<div class="dd-col">
+      <span class="dd-time">${String(dt.getUTCHours()).padStart(2, '0')}</span>
+      <span class="dd-ic">${weatherSVG(h.weather_code[i], isDay)}</span>
+      <span class="dd-temp">${tempStr(h.temperature_2m[i])}</span>
+      <span class="dd-pp">${pp ? `💧${pp}%` : ''}</span>
+    </div>`;
+  }).join('');
+
+  const sr = parseLocal(d.sunrise ? d.sunrise[dayIdx] : null);
+  const ss = parseLocal(d.sunset ? d.sunset[dayIdx] : null);
+  const uvMax = d.uv_index_max ? d.uv_index_max[dayIdx] : null;
+  const gust = d.wind_gusts_10m_max ? d.wind_gusts_10m_max[dayIdx] : null;
+  const psum = d.precipitation_sum ? d.precipitation_sum[dayIdx] : null;
+  const meta = [
+    sr ? `🌅 ${formatTime(d.sunrise[dayIdx])}` : null,
+    ss ? `🌇 ${formatTime(d.sunset[dayIdx])}` : null,
+    gust != null ? `💨 ${num(gust)} ${windUnitLabel(s.units.wind)}` : null,
+    uvMax != null ? `🔆 UV ${num(uvMax)}` : null,
+    psum != null ? `🌧️ ${num(psum, 1)} ${s.units.temp === 'F' ? 'in' : 'mm'}` : null,
+  ].filter(Boolean).map((m) => `<span>${m}</span>`).join('');
+
+  return `<div class="dd-scroll"><div class="dd-cols">${cols}</div></div><div class="dd-meta">${meta}</div>`;
 }
 
 // ---- helpers -----------------------------------------------------------------
 function currentHourIndex(h) {
-  const now = Date.now();
-  let idx = h.time.findIndex((iso) => new Date(iso).getTime() >= now - 3600000);
-  return idx < 0 ? 0 : idx;
+  const now = placeNowMs();
+  let idx = h.time.findIndex((iso) => { const d = parseLocal(iso); return d && d.getTime() >= now - 3600000; });
+  if (idx < 0) idx = h.time.length - 1;
+  return Math.max(0, Math.min(idx, h.time.length - 1));
 }
 function firstNum(arr) {
   for (const v of arr) if (v != null && !Number.isNaN(v)) return v;
