@@ -8,8 +8,9 @@ import { initEffects, setScene } from './effects.js';
 import { renderAll, renderFamily, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
-  placeFromParams, shareURL, samePlace,
+  placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
 } from './store.js';
+import { buildShareBlob } from './sharecard.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -25,7 +26,13 @@ async function boot() {
   wireEvents();
   renderSavedChips();
 
-  // 1) URL shared link  2) last used place  3) geolocation  4) default (Berlin)
+  // 0) shared family set  1) shared single place  2) last used  3) geolocation  4) default
+  const fam = familyFromParams(location.search);
+  if (fam && fam.length) {
+    importPlaces(fam);
+    renderSavedChips();
+    return selectPlace(fam[0], false);
+  }
   const shared = placeFromParams(location.search);
   if (shared) return selectPlace(shared, false);
 
@@ -223,13 +230,36 @@ async function share() {
   if (!currentPlace) return;
   const url = shareURL(currentPlace);
   const text = t('shareText', { place: currentPlace.name });
+  // Try sharing a rendered weather image (best on mobile)
+  try {
+    if (currentData && navigator.canShare) {
+      const blob = await buildShareBlob(currentData, settings);
+      if (blob) {
+        const file = new File([blob], 'wetterfux.png', { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: t('appName'), text, url });
+          return;
+        }
+      }
+    }
+  } catch { /* fall through to link sharing */ }
   if (navigator.share) {
     try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
   }
-  try {
-    await navigator.clipboard.writeText(url);
-    toast(t('copied'));
-  } catch { prompt(t('share'), url); }
+  try { await navigator.clipboard.writeText(url); toast(t('copied')); }
+  catch { prompt(t('share'), url); }
+}
+
+async function shareFamily() {
+  const places = loadPlaces();
+  if (places.length < 2) return;
+  const url = familyURL(places);
+  const text = getLang() === 'en' ? 'Our family weather – with Wetterfux' : 'Unser Familien-Wetter – mit Wetterfux';
+  if (navigator.share) {
+    try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
+  }
+  try { await navigator.clipboard.writeText(url); toast(t('copied')); }
+  catch { prompt(t('share'), url); }
 }
 
 // ---- Settings panel ----------------------------------------------------------
@@ -303,6 +333,7 @@ function wireEvents() {
   $('#btnLocate').addEventListener('click', tryGeolocation);
   $('#btnStar').addEventListener('click', toggleStar);
   $('#btnShare').addEventListener('click', share);
+  $('#family').addEventListener('click', (e) => { if (e.target.closest('.fam-share')) shareFamily(); });
   $('#btnSettings').addEventListener('click', openSettings);
   $('#settingsClose').addEventListener('click', closeSettings);
   $('#settingsPanel').addEventListener('click', (e) => { if (e.target.id === 'settingsPanel') closeSettings(); });

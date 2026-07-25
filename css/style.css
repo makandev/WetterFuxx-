@@ -194,6 +194,18 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .hero-hilo .hi { color: #ffd9a0; }
 .hero-hilo .lo { color: #bcd6ff; }
 
+/* ---- Weather moment of the day ---- */
+.moment { display: flex; align-items: center; gap: 14px; background: linear-gradient(150deg, rgba(255,200,120,0.22), rgba(255,150,90,0.12)); }
+.mom-emoji { font-size: 40px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0,0,0,.2)); }
+.mom-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.mom-text b { font-size: 17px; }
+.mom-text span { font-size: 14px; color: var(--text-dim); line-height: 1.4; }
+
+/* ---- Family share button ---- */
+.fam-title { display: flex; align-items: center; justify-content: space-between; }
+.fam-share { background: var(--card-bg-2); border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; }
+.fam-share:active { transform: scale(0.96); }
+
 /* ---- Live rain radar (Leaflet) ---- */
 .radar-map { height: 320px; border-radius: var(--radius-sm); overflow: hidden; background: #223; }
 .radar-map .leaflet-container { background: #1b2436; font-family: var(--font); }
