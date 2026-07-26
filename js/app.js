@@ -5,6 +5,7 @@ import { searchPlaces, reversePlace, getWeather, getAlerts, getCurrentBrief } fr
 import { skyGroup } from './weathercodes.js';
 import { placeLabel } from './format.js';
 import { initEffects, setScene } from './effects.js';
+import { invalidateRadar } from './radar.js';
 import { renderAll, renderFamily, renderCompare, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
@@ -25,6 +26,7 @@ async function boot() {
   applyStaticText();
   initEffects($('#bg-canvas'));
   wireEvents();
+  wireTabs();
   renderSavedChips();
   renderStreak();
   applyLayout();
@@ -50,9 +52,41 @@ async function boot() {
 function showWelcome() { $('#welcome').classList.add('open'); }
 function hideWelcome() { $('#welcome').classList.remove('open'); }
 
+// ---- Swipeable tabs ----------------------------------------------------------
+let activeTab = 0;
+function wireTabs() {
+  const pager = $('#pager');
+  if (!pager) return;
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const i = +tab.dataset.tab;
+      pager.scrollTo({ left: i * pager.clientWidth, behavior: 'smooth' });
+      setActiveTab(i);
+    });
+  });
+  let raf = 0;
+  pager.addEventListener('scroll', () => {
+    if (raf) return;
+    raf = requestAnimationFrame(() => {
+      raf = 0;
+      setActiveTab(Math.round(pager.scrollLeft / pager.clientWidth));
+    });
+  }, { passive: true });
+  window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; });
+}
+function setActiveTab(i) {
+  if (i === activeTab || i < 0) return;
+  activeTab = i;
+  document.querySelectorAll('.tab').forEach((tab) => {
+    const on = +tab.dataset.tab === i;
+    tab.classList.toggle('active', on);
+    tab.setAttribute('aria-selected', String(on));
+  });
+  if (i === 1) setTimeout(invalidateRadar, 250); // Verlauf → recompute map size
+}
+
 function applyStaticText() {
   document.documentElement.lang = getLang();
-  $('#tagline').textContent = t('tagline');
   $('#searchInput').placeholder = t('search');
   $('#btnLocate').title = t('myLocation');
   $('#btnSearch').title = t('search');
@@ -427,6 +461,7 @@ function currentOrder() {
   return [...valid, ...missing];
 }
 function applyLayout() {
+  if ($('#pager')) return; // multi-page mode manages placement itself
   const app = document.querySelector('.app');
   const footer = document.querySelector('.foot');
   const hidden = (settings.layout && settings.layout.hidden) || [];
@@ -442,6 +477,12 @@ function applyLayout() {
 function buildLayoutList() {
   const list = $('#layoutList');
   if (!list) return;
+  if ($('#pager')) { // card manager is disabled in multi-page mode for now
+    list.hidden = true;
+    const head = document.querySelector('.set-layout-head');
+    if (head) head.hidden = true;
+    return;
+  }
   const hidden = (settings.layout && settings.layout.hidden) || [];
   const order = currentOrder();
   list.innerHTML = order.map((id, i) => `
@@ -518,6 +559,7 @@ function wireOffline() {
 
 // ---- Pull to refresh ---------------------------------------------------------
 function wirePullToRefresh() {
+  if ($('#pager')) return; // pages scroll independently; PTR handled per-page later
   const ptr = $('#ptr');
   let startY = 0, pulling = false, dist = 0;
   const THRESH = 70;

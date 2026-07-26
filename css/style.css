@@ -103,13 +103,40 @@ body[data-design="daylight"] .set-row select option,
 body[data-design="sand"] .set-row select option,
 body[data-design="mist"] .set-row select option { color: #16324f; }
 
-/* ---- Layout ---- */
+/* ---- Layout: app shell with swipeable pages + bottom tabs ---- */
 .app {
   position: relative; z-index: 2;
-  max-width: 680px;
-  margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+  max-width: 680px; margin: 0 auto;
+  height: 100vh; height: 100dvh;
+  display: flex; flex-direction: column;
 }
+.topbar { padding: max(12px, env(safe-area-inset-top)) 16px 8px; flex-shrink: 0; }
+.shared-head { padding: 0 16px; flex-shrink: 0; }
+.shared-head .saved { margin-bottom: 8px; }
+.pager {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.pager::-webkit-scrollbar { display: none; }
+.page {
+  flex: 0 0 100%; width: 100%;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 6px 16px calc(14px + env(safe-area-inset-bottom));
+  scrollbar-width: thin;
+}
+.tabbar {
+  flex-shrink: 0; display: flex;
+  border-top: 1px solid var(--hairline);
+  background: var(--card-bg); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab { flex: 1; background: none; border: none; color: var(--text-faint); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 7px; cursor: pointer; font: inherit; font-size: 11px; transition: color .2s ease; }
+.tab.active { color: var(--text); }
+.tab-ic { font-size: 20px; line-height: 1; }
+.tab-lb { font-weight: 600; }
 
 /* ---- Top bar ---- */
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -292,6 +319,35 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .bio-label i { font-style: normal; color: var(--text-faint); font-size: 12px; }
 .bio-val { font-weight: 600; font-size: 14px; }
 
+/* ---- Symptom journal ---- */
+.jr-risk { font-size: 13.5px; line-height: 1.5; margin-bottom: 10px; }
+.jr-insight { font-size: 13px; color: var(--text-dim); background: var(--card-bg-2); border-radius: 10px; padding: 9px 11px; margin-bottom: 12px; }
+.jr-add-btn { width: 100%; background: var(--accent); color: #1a1400; border: none; border-radius: 12px; padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
+.jr-add-btn:active { transform: scale(0.98); }
+.jr-form { margin-top: 12px; padding: 12px; background: var(--card-bg-2); border-radius: 12px; }
+.jr-syms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.jr-sym { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px; border-radius: 10px; border: 1px solid var(--hairline); background: transparent; color: var(--text); font-size: 11px; cursor: pointer; }
+.jr-sym span { color: var(--text-dim); }
+.jr-sym.on { border-color: var(--accent); background: rgba(255,212,121,0.14); }
+.jr-ints { display: flex; align-items: center; gap: 6px; margin: 12px 0; }
+.jr-lbl { font-size: 12px; color: var(--text-dim); margin-right: auto; }
+.jr-int { width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--hairline); background: transparent; color: var(--text); cursor: pointer; font-weight: 600; }
+.jr-int.on { background: var(--accent); color: #1a1400; border-color: var(--accent); }
+.jr-note { width: 100%; background: rgba(255,255,255,0.1); border: 1px solid var(--hairline); border-radius: 8px; padding: 9px; color: var(--text); font-size: 14px; }
+.jr-note::placeholder { color: var(--text-faint); }
+.jr-actions { display: flex; gap: 8px; margin-top: 12px; }
+.jr-cancel { flex: 1; background: transparent; border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 10px; padding: 9px; cursor: pointer; }
+.jr-save { flex: 2; background: var(--accent); color: #1a1400; border: none; border-radius: 10px; padding: 9px; font-weight: 700; cursor: pointer; }
+.jr-save:disabled { opacity: 0.4; cursor: default; }
+.jr-list { margin-top: 12px; }
+.jr-entry { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-top: 1px solid var(--hairline); }
+.jr-e-ic { font-size: 20px; }
+.jr-e-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.jr-e-main small { color: var(--text-faint); font-size: 11.5px; }
+.jr-del { background: transparent; border: none; color: var(--text-faint); font-size: 20px; cursor: pointer; padding: 0 6px; }
+.jr-empty { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-top: 12px; }
+.jr-disc { font-size: 11px; color: var(--text-faint); margin-top: 12px; text-align: center; }
+
 /* ---- Alert severities (official DWD) ---- */
 .alert-body { display: flex; flex-direction: column; line-height: 1.35; }
 .alert-body small { color: var(--text-faint); font-size: 12px; }
@@ -355,6 +411,15 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .compass-ring { fill: rgba(255,255,255,0.08); stroke: rgba(255,255,255,0.35); stroke-width: 1.5; }
 .compass-n { fill: var(--text-dim); font-size: 8px; text-anchor: middle; font-weight: 700; }
 .compass-needle { fill: #ff8a6b; }
+
+/* ---- Next 6 hours ---- */
+.sh-list { display: flex; flex-direction: column; gap: 8px; }
+.sh-row { display: grid; grid-template-columns: 50px 34px 46px 1fr; align-items: center; gap: 10px; padding: 10px; background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 12px; }
+.sh-time { font-size: 13px; font-weight: 600; }
+.sh-ic { width: 34px; height: 34px; }
+.sh-ic svg { width: 100%; height: 100%; }
+.sh-temp { font-size: 22px; font-weight: 600; }
+.sh-metrics { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; color: var(--text-dim); }
 
 /* ---- Hourly combined chart ---- */
 .hr-legend { font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-faint); margin-left: 6px; }

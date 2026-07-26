@@ -6,6 +6,8 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
+import { loadJournal, addJournalEntry, removeJournalEntry } from './store.js';
+import { SYMPTOMS, symptomLabel, symptomEmoji, buildInsights, personalRisk } from './journal.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
@@ -28,9 +30,11 @@ export function renderAll(data, settings) {
   renderActivity(data, settings);
   renderActivities(data, settings);
   renderDetails(data, settings);
+  renderSixHour(data, settings);
   renderHourly(data, settings);
   renderAir(data);
   renderBiowetter(data, settings);
+  renderJournal(data, settings);
   renderSunMoon(data);
   renderDaily(data, settings);
   $('#updated').textContent = `${t('updated')} ${formatTime(new Date(data.fetchedAt).toISOString())}`;
@@ -394,6 +398,81 @@ function bioRow(icon, label, value, sub) {
   return `<div class="bio-row"><span class="bio-ic">${icon}</span><span class="bio-label">${label}${sub ? ` <i>${sub}</i>` : ''}</span><span class="bio-val">${value}</span></div>`;
 }
 
+// ---- Symptom journal (personal bio-weather) ---------------------------------
+function journalSnapshot(data) {
+  const h = data.forecast.hourly;
+  const idx = currentHourIndex(h);
+  const c = data.forecast.current;
+  const p = h.pressure_msl ? h.pressure_msl[idx] : (c.pressure_msl || null);
+  const p12 = (h.pressure_msl && idx >= 12) ? +(h.pressure_msl[idx] - h.pressure_msl[idx - 12]).toFixed(1) : null;
+  const p3 = (h.pressure_msl && idx >= 3) ? +(h.pressure_msl[idx] - h.pressure_msl[idx - 3]).toFixed(1) : null;
+  return { pressure: p != null ? Math.round(p) : null, p12, p3, temp: Math.round(c.temperature_2m), hum: c.relative_humidity_2m, code: c.weather_code };
+}
+function renderJournal(data, s) {
+  const box = $('#journal');
+  if (!box) return;
+  const en = getLang() === 'en';
+  const entries = loadJournal();
+  const snap = journalSnapshot(data);
+  const ins = buildInsights(entries, en);
+  const risk = personalRisk(entries, snap, en);
+
+  const symBtns = SYMPTOMS.map((sy) => `<button class="jr-sym" data-key="${sy.key}">${sy.emoji}<span>${en ? sy.en : sy.de}</span></button>`).join('');
+  const intBtns = [1, 2, 3, 4, 5].map((n) => `<button class="jr-int" data-int="${n}">${n}</button>`).join('');
+  const list = entries.slice(0, 8).map((e) => {
+    const d = new Date(e.ts);
+    const when = d.toLocaleDateString(en ? 'en-GB' : 'de-DE', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(en ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
+    const trend = e.wx && typeof e.wx.p12 === 'number' ? `${e.wx.p12 > 0 ? '↗' : e.wx.p12 < 0 ? '↘' : '→'} ${e.wx.p12} hPa` : '';
+    const dots = '●'.repeat(e.intensity) + '○'.repeat(5 - e.intensity);
+    return `<div class="jr-entry"><span class="jr-e-ic">${symptomEmoji(e.type)}</span>
+      <span class="jr-e-main"><b>${escapeHtml(symptomLabel(e.type, en))}</b><small>${when} · ${dots}${trend ? ` · ${trend}` : ''}${e.note ? ` · ${escapeHtml(e.note)}` : ''}</small></span>
+      <button class="jr-del" data-id="${e.id}" aria-label="${en ? 'delete' : 'löschen'}">×</button></div>`;
+  }).join('');
+  const riskCls = risk ? (risk.level === 'high' ? 'lvl-poor' : risk.level === 'mod' ? 'lvl-moderate' : 'lvl-good') : '';
+
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🩺 ${en ? 'Symptom diary' : 'Symptom-Tagebuch'}</div>
+    ${risk ? `<div class="jr-risk"><span class="badge ${riskCls}">${en ? 'Today for you' : 'Heute für dich'}</span> ${risk.text}</div>` : ''}
+    ${ins ? `<div class="jr-insight">📊 ${ins.text}</div>` : ''}
+    <button class="jr-add-btn">➕ ${en ? 'New entry' : 'Neuer Eintrag'}</button>
+    <div class="jr-form" hidden>
+      <div class="jr-syms">${symBtns}</div>
+      <div class="jr-ints"><span class="jr-lbl">${en ? 'Intensity' : 'Stärke'}</span>${intBtns}</div>
+      <input class="jr-note" type="text" maxlength="80" placeholder="${en ? 'Note (optional)' : 'Notiz (optional)'}" />
+      <div class="jr-actions"><button class="jr-cancel">${en ? 'Cancel' : 'Abbrechen'}</button><button class="jr-save" disabled>${en ? 'Save' : 'Speichern'}</button></div>
+    </div>
+    ${entries.length ? `<div class="jr-list">${list}</div>` : `<p class="jr-empty">${en ? 'No entries yet. Log how you feel and Wetterfux learns how your body reacts to the weather.' : 'Noch keine Einträge. Trag ein, wie du dich fühlst – Wetterfux lernt, wie dein Körper auf Wetter reagiert.'}</p>`}
+    <p class="jr-disc">🔒 ${en ? 'Local & private · not medical advice' : 'Lokal & privat · keine medizinische Diagnose'}</p>`;
+
+  // interactions
+  let selSym = null, selInt = null;
+  const form = box.querySelector('.jr-form');
+  const saveBtn = box.querySelector('.jr-save');
+  const refreshSave = () => { saveBtn.disabled = !(selSym && selInt); };
+  box.querySelector('.jr-add-btn').addEventListener('click', () => { form.hidden = !form.hidden; });
+  box.querySelector('.jr-cancel').addEventListener('click', () => { form.hidden = true; });
+  box.querySelectorAll('.jr-sym').forEach((b) => b.addEventListener('click', () => {
+    selSym = b.dataset.key;
+    box.querySelectorAll('.jr-sym').forEach((x) => x.classList.toggle('on', x === b));
+    refreshSave();
+  }));
+  box.querySelectorAll('.jr-int').forEach((b) => b.addEventListener('click', () => {
+    selInt = +b.dataset.int;
+    box.querySelectorAll('.jr-int').forEach((x) => x.classList.toggle('on', +x.dataset.int <= selInt));
+    refreshSave();
+  }));
+  saveBtn.addEventListener('click', () => {
+    if (!selSym || !selInt) return;
+    const note = box.querySelector('.jr-note').value.trim().slice(0, 80);
+    addJournalEntry({ id: `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, ts: Date.now(), type: selSym, intensity: selInt, note, wx: snap });
+    renderJournal(data, s);
+  });
+  box.querySelectorAll('.jr-del').forEach((b) => b.addEventListener('click', () => {
+    removeJournalEntry(b.dataset.id);
+    renderJournal(data, s);
+  }));
+}
+
 // ---- Warnings: official DWD (Bright Sky) with local fallback -----------------
 function renderAlerts(data, s) {
   const box = $('#alerts');
@@ -592,6 +671,45 @@ function compass(deg) {
     <g style="transform:rotate(${deg}deg);transform-origin:24px 24px">
       <polygon points="24,8 20,26 24,22 28,26" class="compass-needle"/>
     </g></svg>`;
+}
+
+// ---- Next 6 hours (detailed) ------------------------------------------------
+function renderSixHour(data, s) {
+  const box = $('#sixhour');
+  const h = data.forecast.hourly;
+  const start = currentHourIndex(h);
+  const idxs = [];
+  for (let i = start; i < Math.min(start + 6, h.time.length); i++) idxs.push(i);
+  if (idxs.length < 2) { box.hidden = true; return; }
+  const en = getLang() === 'en';
+  const wu = windUnitLabel(s.units.wind);
+  const pu = s.units.temp === 'F' ? 'in' : 'mm';
+
+  const rows = idxs.map((i, k) => {
+    const isDay = h.is_day ? h.is_day[i] === 1 : true;
+    const label = k === 0 ? t('now') : formatHour(h.time[i]);
+    const prob = h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0;
+    const precip = h.precipitation ? (h.precipitation[i] || 0) : 0;
+    const wind = h.wind_speed_10m ? h.wind_speed_10m[i] : 0;
+    const gust = h.wind_gusts_10m ? h.wind_gusts_10m[i] : 0;
+    const hum = h.relative_humidity_2m ? h.relative_humidity_2m[i] : null;
+    const uv = h.uv_index ? (h.uv_index[i] || 0) : 0;
+    const feels = h.apparent_temperature ? h.apparent_temperature[i] : h.temperature_2m[i];
+    return `<div class="sh-row">
+      <div class="sh-time">${label}</div>
+      <div class="sh-ic" role="img" aria-label="${describe(h.weather_code[i], getLang())}">${weatherSVG(h.weather_code[i], isDay)}</div>
+      <div class="sh-temp" style="color:${tempColor(toC(h.temperature_2m[i], s.units.temp))}">${tempStr(h.temperature_2m[i])}</div>
+      <div class="sh-metrics">
+        <span>🌡️ ${en ? 'feels' : 'gefühlt'} ${tempStr(feels)}</span>
+        <span>💧 ${prob}%${precip > 0 ? ` · ${num(precip, 1)} ${pu}` : ''}</span>
+        <span>💨 ${num(wind)} ${wu}${gust ? ` (${num(gust)})` : ''}</span>
+        ${hum != null ? `<span>💦 ${hum}%</span>` : ''}
+        ${uv >= 1 ? `<span>🔆 UV ${num(uv)}</span>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">⏱️ ${en ? 'Next 6 hours' : 'Nächste 6 Stunden'}</div><div class="sh-list">${rows}</div>`;
 }
 
 // ---- Hourly (48h) — combined chart: temp area + precip bars + day/night ------
