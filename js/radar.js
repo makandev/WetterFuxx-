@@ -81,6 +81,11 @@ function recenter(place) {
   if (marker) marker.setLatLng([place.lat, place.lon]);
 }
 
+// Called when the radar's tab becomes visible so Leaflet re-measures its container
+export function invalidateRadar() {
+  if (map) map.invalidateSize();
+}
+
 async function loadFrames() {
   try {
     const res = await fetch(RAINVIEWER, { cache: 'no-store' });
