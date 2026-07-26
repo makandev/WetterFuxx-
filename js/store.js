@@ -8,6 +8,7 @@ const DEFAULT_SETTINGS = {
   theme: 'auto', // design id or 'auto'
   units: { temp: 'C', wind: 'kmh' }, // temp: C|F ; wind: kmh|mph|ms
   person: { cold: 'normal', profile: 'adult' }, // cold: cold|normal|warm ; profile: adult|kid|bike
+  layout: { order: [], hidden: [] }, // customizable card order + hidden ids
   lastPlaceId: null,
 };
 
@@ -28,6 +29,7 @@ export function loadSettings() {
     ...DEFAULT_SETTINGS, ...s,
     units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) },
     person: { ...DEFAULT_SETTINGS.person, ...(s.person || {}) },
+    layout: { ...DEFAULT_SETTINGS.layout, ...(s.layout || {}) },
   };
 }
 export function saveSettings(s) { write(KEY_SETTINGS, s); }
@@ -122,3 +124,20 @@ export function importPlaces(list) {
   (list || []).forEach((p) => addPlace(p));
   return loadPlaces();
 }
+
+// ---- Daily open streak -------------------------------------------------------
+const KEY_STREAK = 'wf.streak.v1';
+function ymd(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+export function bumpStreak() {
+  const now = new Date();
+  const today = ymd(now);
+  const s = read(KEY_STREAK, { last: null, count: 0, best: 0 });
+  if (s.last === today) return s;
+  const yesterday = ymd(new Date(now.getTime() - 86400000));
+  s.count = s.last === yesterday ? (s.count || 0) + 1 : 1;
+  s.last = today;
+  s.best = Math.max(s.best || 0, s.count);
+  write(KEY_STREAK, s);
+  return s;
+}
+export function getStreak() { return read(KEY_STREAK, { last: null, count: 0, best: 0 }); }

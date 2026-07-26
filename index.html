@@ -45,6 +45,7 @@
     </header>
 
     <p id="tagline" class="tagline"></p>
+    <span id="streakPill" class="streak-pill" hidden></span>
 
     <!-- Saved place chips -->
     <section class="saved">
@@ -100,7 +101,7 @@
     <!-- Place comparison -->
     <section id="compare" class="card" hidden></section>
 
-    <div class="two-col">
+    <div id="airbio" class="two-col">
       <!-- Air quality -->
       <section id="air" class="card" hidden></section>
       <!-- Bio-weather & health -->
@@ -221,6 +222,10 @@
           </optgroup>
         </select>
       </label>
+      <div class="set-row set-layout-head">
+        <span id="layoutTitle">🧩 Karten anpassen</span>
+      </div>
+      <div id="layoutList" class="layout-list"></div>
       <button id="btnInstall" class="btn btn-block install-btn" hidden>📲 App installieren</button>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
     </div>

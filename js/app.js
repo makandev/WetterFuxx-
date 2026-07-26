@@ -9,6 +9,7 @@ import { renderAll, renderFamily, renderCompare, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
   placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
+  bumpStreak, getStreak,
 } from './store.js';
 import { buildShareBlob } from './sharecard.js';
 
@@ -25,6 +26,8 @@ async function boot() {
   initEffects($('#bg-canvas'));
   wireEvents();
   renderSavedChips();
+  renderStreak();
+  applyLayout();
 
   // 0) shared family set  1) shared single place  2) last used  3) geolocation  4) default
   const fam = familyFromParams(location.search);
@@ -63,6 +66,7 @@ function applyStaticText() {
   $('#updateBanner').textContent = t('updateAvail');
   $('#offlineBanner').textContent = t('offlineNote');
   $('#btnInstall').textContent = t('installApp');
+  $('#layoutTitle').textContent = getLang() === 'en' ? '🧩 Customize cards' : '🧩 Karten anpassen';
   document.title = `${t('appName')} · ${t('tagline')}`;
 }
 
@@ -290,6 +294,7 @@ function openSettings() {
   panel.querySelector('[data-set="profile"]').value = settings.person.profile;
   panel.querySelector('[data-set="lang"]').value = settings.lang;
   panel.querySelector('[data-set="theme"]').value = settings.theme;
+  buildLayoutList();
 }
 function closeSettings() { $('#settingsPanel').classList.remove('open'); }
 function onSettingChange(e) {
@@ -352,6 +357,10 @@ function wireEvents() {
   $('#btnStar').addEventListener('click', toggleStar);
   $('#btnShare').addEventListener('click', share);
   $('#family').addEventListener('click', (e) => { if (e.target.closest('.fam-share')) shareFamily(); });
+  $('#sunmoon').addEventListener('click', (e) => {
+    const b = e.target.closest('.ics-btn');
+    if (b) downloadICS(b.dataset.start, b.dataset.end, b.dataset.title);
+  });
   $('#btnSettings').addEventListener('click', openSettings);
   $('#settingsClose').addEventListener('click', closeSettings);
   $('#settingsPanel').addEventListener('click', (e) => { if (e.target.id === 'settingsPanel') closeSettings(); });
@@ -368,6 +377,98 @@ function wireEvents() {
 function isTyping() {
   const a = document.activeElement;
   return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+}
+
+// ---- Daily streak ------------------------------------------------------------
+function renderStreak() {
+  const s = bumpStreak();
+  const pill = $('#streakPill');
+  if (!pill) return;
+  if (s.count >= 2) {
+    pill.hidden = false;
+    const days = getLang() === 'en' ? 'days in a row' : 'Tage in Folge';
+    pill.textContent = `🔥 ${s.count} ${days}`;
+    pill.title = getLang() === 'en' ? `Best: ${s.best}` : `Bestwert: ${s.best}`;
+  } else {
+    pill.hidden = true;
+  }
+}
+
+// ---- Calendar (.ics) for golden hour ----------------------------------------
+function downloadICS(startStamp, endStamp, title) {
+  const stampNoTz = startStamp; // floating local time
+  const uid = `wetterfux-${startStamp}@wetterfux`;
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wetterfux//DE', 'BEGIN:VEVENT',
+    `UID:${uid}`, `DTSTART:${startStamp}`, `DTEND:${endStamp}`,
+    `SUMMARY:${title}`, 'DESCRIPTION:Wetterfux', 'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'goldene-stunde.ics';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  void stampNoTz;
+}
+
+// ---- Dashboard layout (order + hidden) --------------------------------------
+const CARD_IDS = ['ask', 'moment', 'clothing', 'nowcast', 'hourly', 'daily', 'details',
+  'activity', 'activities', 'family', 'compare', 'airbio', 'radar', 'sunmoon'];
+function cardLabel(id) {
+  const de = { ask: 'Frag Wetterfux', moment: 'Wetter-Moment', clothing: 'Kleidungstipp', nowcast: 'Regen-Nowcast', hourly: 'Stündlich', daily: '14-Tage', details: 'Details', activity: 'Beste Zeit', activities: 'Aktivitäten', family: 'Familien-Wetter', compare: 'Orte vergleichen', airbio: 'Luft & Biowetter', radar: 'RegenRadar', sunmoon: 'Sonne & Mond' };
+  const en = { ask: 'Ask Wetterfux', moment: 'Weather moment', clothing: 'Clothing tip', nowcast: 'Rain nowcast', hourly: 'Hourly', daily: '14-day', details: 'Details', activity: 'Best time', activities: 'Activities', family: 'Family weather', compare: 'Compare places', airbio: 'Air & bio', radar: 'Rain radar', sunmoon: 'Sun & moon' };
+  return (getLang() === 'en' ? en : de)[id] || id;
+}
+function currentOrder() {
+  const saved = (settings.layout && settings.layout.order) || [];
+  const valid = saved.filter((id) => CARD_IDS.includes(id));
+  const missing = CARD_IDS.filter((id) => !valid.includes(id));
+  return [...valid, ...missing];
+}
+function applyLayout() {
+  const app = document.querySelector('.app');
+  const footer = document.querySelector('.foot');
+  const hidden = (settings.layout && settings.layout.hidden) || [];
+  currentOrder().forEach((id) => {
+    const el = document.getElementById(id);
+    if (el && footer) app.insertBefore(el, footer);
+  });
+  CARD_IDS.forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.toggleAttribute('data-huser', hidden.includes(id));
+  });
+}
+function buildLayoutList() {
+  const list = $('#layoutList');
+  if (!list) return;
+  const hidden = (settings.layout && settings.layout.hidden) || [];
+  const order = currentOrder();
+  list.innerHTML = order.map((id, i) => `
+    <div class="layout-row" data-id="${id}">
+      <button class="lay-move" data-dir="up" ${i === 0 ? 'disabled' : ''} aria-label="hoch">↑</button>
+      <button class="lay-move" data-dir="down" ${i === order.length - 1 ? 'disabled' : ''} aria-label="runter">↓</button>
+      <span class="lay-name">${cardLabel(id)}</span>
+      <label class="lay-toggle"><input type="checkbox" ${hidden.includes(id) ? '' : 'checked'} /></label>
+    </div>`).join('');
+  list.querySelectorAll('.lay-move').forEach((btn) => btn.addEventListener('click', () => {
+    const row = btn.closest('.layout-row');
+    const id = row.dataset.id;
+    const ord = currentOrder();
+    const idx = ord.indexOf(id);
+    const to = btn.dataset.dir === 'up' ? idx - 1 : idx + 1;
+    if (to < 0 || to >= ord.length) return;
+    ord.splice(to, 0, ord.splice(idx, 1)[0]);
+    settings.layout.order = ord;
+    saveSettings(settings); applyLayout(); buildLayoutList();
+  }));
+  list.querySelectorAll('.lay-toggle input').forEach((cb) => cb.addEventListener('change', () => {
+    const id = cb.closest('.layout-row').dataset.id;
+    let h = (settings.layout.hidden || []).filter((x) => x !== id);
+    if (!cb.checked) h.push(id);
+    settings.layout.hidden = h;
+    saveSettings(settings); applyLayout();
+  }));
 }
 
 // ---- Onboarding wiring -------------------------------------------------------

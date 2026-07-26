@@ -575,6 +575,19 @@ body { overscroll-behavior-y: contain; }
 .ptr.spin .ptr-spin { animation: spin .8s linear infinite; }
 .saved-empty { cursor: pointer; }
 
+/* ---- Extras: streak, calendar, layout manager ---- */
+[data-huser] { display: none !important; }
+.streak-pill { display: inline-block; margin: -8px 2px 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,150,80,0.22); border: 1px solid rgba(255,180,120,0.35); font-size: 12.5px; font-weight: 700; }
+.ics-btn { margin-top: 14px; width: 100%; background: var(--card-bg-2); border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ics-btn:active { transform: scale(0.98); }
+.set-layout-head { border-bottom: none; padding-bottom: 2px; }
+.layout-list { padding: 0 16px 10px; }
+.layout-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--hairline); }
+.lay-move { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--card-brd); background: var(--card-bg-2); color: var(--text); cursor: pointer; font-size: 14px; }
+.lay-move:disabled { opacity: .35; cursor: default; }
+.lay-name { flex: 1; font-size: 14px; }
+.lay-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+
 /* =========================================================
    Animated weather SVG icons
    ========================================================= */
