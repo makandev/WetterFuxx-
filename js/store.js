@@ -161,3 +161,34 @@ export function removeJournalEntry(id) {
   return list;
 }
 export function clearJournal() { write(KEY_JOURNAL, []); return []; }
+
+// Journal profiles (family members) ------------------------------------------
+const KEY_PROFILES = 'wf.profiles.v1';
+const KEY_ACTIVEPROF = 'wf.jprofile.v1';
+export function loadProfiles() {
+  const p = read(KEY_PROFILES, null);
+  if (p && Array.isArray(p) && p.length) return p;
+  return [{ id: 'me', name: 'Ich' }];
+}
+export function saveProfiles(list) { write(KEY_PROFILES, list); }
+export function addProfile(name) {
+  const list = loadProfiles();
+  const id = 'p' + Date.now().toString(36);
+  list.push({ id, name: String(name || 'Person').trim().slice(0, 20) || 'Person' });
+  saveProfiles(list);
+  setActiveProfile(id);
+  return list;
+}
+export function removeProfile(id) {
+  if (id === 'me') return loadProfiles();
+  const list = loadProfiles().filter((p) => p.id !== id);
+  saveProfiles(list);
+  if (getActiveProfile() === id) setActiveProfile('me');
+  return list;
+}
+export function getActiveProfile() { return read(KEY_ACTIVEPROF, 'me'); }
+export function setActiveProfile(id) { write(KEY_ACTIVEPROF, id); }
+
+export function exportJournal() {
+  return JSON.stringify({ version: 1, exported: new Date().toISOString(), profiles: loadProfiles(), entries: loadJournal() }, null, 2);
+}
