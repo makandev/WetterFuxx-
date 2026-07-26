@@ -38,6 +38,26 @@ export function buildInsights(entries, en) {
   return { top, count: withP.length, avg, pct, text, sensitive: avg < -1.5 };
 }
 
+// Extra correlations: mugginess and temperature swing
+export function extraInsights(entries, en) {
+  const out = [];
+  const withM = entries.filter((e) => e.wx && typeof e.wx.muggy === 'boolean');
+  if (withM.length >= 4) {
+    const m = withM.filter((e) => e.wx.muggy).length;
+    if (m >= Math.ceil(withM.length * 0.4)) {
+      out.push(en ? `It was muggy in ${m} of ${withM.length} entries.` : `Bei ${m} von ${withM.length} Einträgen war es schwül.`);
+    }
+  }
+  const withS = entries.filter((e) => e.wx && typeof e.wx.swing === 'number');
+  if (withS.length >= 4) {
+    const avg = withS.reduce((s, e) => s + e.wx.swing, 0) / withS.length;
+    if (avg >= 8) {
+      out.push(en ? `Often on days with big temperature swings (avg ${avg.toFixed(0)}°).` : `Oft an Tagen mit großen Temperaturschwankungen (Ø ${avg.toFixed(0)}°).`);
+    }
+  }
+  return out;
+}
+
 // Personalised risk for today from the user's own pattern + today's pressure trend
 export function personalRisk(entries, snapshot, en) {
   const ins = buildInsights(entries, en);
