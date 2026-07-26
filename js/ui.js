@@ -782,7 +782,13 @@ function renderSunMoon(data) {
       <span class="moon-emoji">${moon.emoji}</span>
       <div><b>${moon.name}</b><span class="lbl">${t('moonPhase')} · ${moon.illum}%</span></div>
       <div class="daylen"><span class="lbl">${t('dayLength')}</span><b>${daylightStr(d.daylight_duration[0])}</b></div>
-    </div>`;
+    </div>
+    <button class="ics-btn" data-start="${floatStamp(new Date(ssT - 40 * 60000))}" data-end="${floatStamp(new Date(ssT))}"
+      data-title="${getLang() === 'en' ? 'Golden hour 📸' : 'Goldene Stunde 📸'}">📅 ${getLang() === 'en' ? 'Golden hour to calendar' : 'Goldene Stunde in Kalender'}</button>`;
+}
+function floatStamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}00`;
 }
 
 // ---- 14-day forecast ---------------------------------------------------------
