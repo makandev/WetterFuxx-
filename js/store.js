@@ -141,3 +141,23 @@ export function bumpStreak() {
   return s;
 }
 export function getStreak() { return read(KEY_STREAK, { last: null, count: 0, best: 0 }); }
+
+// ---- Symptom journal ---------------------------------------------------------
+const KEY_JOURNAL = 'wf.journal.v1';
+export function loadJournal() {
+  const j = read(KEY_JOURNAL, []);
+  return Array.isArray(j) ? j : [];
+}
+export function addJournalEntry(entry) {
+  const list = loadJournal();
+  list.push(entry);
+  list.sort((a, b) => b.ts - a.ts);
+  write(KEY_JOURNAL, list);
+  return list;
+}
+export function removeJournalEntry(id) {
+  const list = loadJournal().filter((e) => e.id !== id);
+  write(KEY_JOURNAL, list);
+  return list;
+}
+export function clearJournal() { write(KEY_JOURNAL, []); return []; }
