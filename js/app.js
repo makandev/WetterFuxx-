@@ -75,13 +75,15 @@ function wireTabs() {
   window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; });
 }
 function setActiveTab(i) {
-  if (i === activeTab || i < 0) return;
+  if (i < 0 || i > 3 || i === activeTab) return;
   activeTab = i;
   document.querySelectorAll('.tab').forEach((tab) => {
     const on = +tab.dataset.tab === i;
     tab.classList.toggle('active', on);
     tab.setAttribute('aria-selected', String(on));
   });
+  // On desktop only the active page is shown; on mobile the class is harmless
+  document.querySelectorAll('.page').forEach((p, idx) => p.classList.toggle('active-page', idx === i));
   if (i === 1) setTimeout(invalidateRadar, 250); // Verlauf → recompute map size
 }
 
