@@ -194,6 +194,17 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .hero-hilo .hi { color: #ffd9a0; }
 .hero-hilo .lo { color: #bcd6ff; }
 
+/* ---- Quick answers ---- */
+.ask-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.ask-pill { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--card-bg-2); border: 1px solid var(--hairline); font-size: 14px; }
+.ask-e { font-size: 18px; }
+.ask-q { flex: 1; color: var(--text-dim); }
+.ask-pill b { font-weight: 700; }
+.ask-pill.yes b { color: #7fb0ff; }
+.ask-pill.no b { color: #7fd29a; }
+body[data-design="daylight"] .ask-pill.yes b, body[data-design="sand"] .ask-pill.yes b, body[data-design="mist"] .ask-pill.yes b { color: #2b6fd8; }
+body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.no b, body[data-design="mist"] .ask-pill.no b { color: #1f9d57; }
+
 /* ---- Weather moment of the day ---- */
 .moment { display: flex; align-items: center; gap: 14px; background: linear-gradient(150deg, rgba(255,200,120,0.22), rgba(255,150,90,0.12)); }
 .mom-emoji { font-size: 40px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0,0,0,.2)); }
@@ -238,6 +249,19 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .fam-desc { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px; }
 .fam-temp { font-size: 18px; font-weight: 600; text-align: right; }
 
+/* ---- Place comparison ---- */
+.cmp-scroll { overflow-x: auto; scrollbar-width: thin; margin: 0 -4px; padding: 0 4px 4px; }
+.cmp-grid { display: flex; gap: 10px; }
+.cmp-col { flex: 0 0 130px; background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 12px 10px; }
+.cmp-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.cmp-flag { font-size: 15px; }
+.cmp-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmp-ic { width: 42px; height: 42px; margin: 0 auto; }
+.cmp-ic svg { width: 100%; height: 100%; }
+.cmp-temp { text-align: center; font-size: 22px; font-weight: 600; margin: 2px 0 8px; }
+.cmp-row { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; padding: 4px 0; border-top: 1px solid var(--hairline); }
+.cmp-row span { color: var(--text-dim); }
+
 /* ---- Best time / activity ---- */
 .acts { display: flex; flex-direction: column; }
 .act-row { display: grid; grid-template-columns: 30px 1fr auto; align-items: center; gap: 10px; padding: 11px 4px; border-top: 1px solid var(--hairline); }
@@ -247,6 +271,17 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .act-win { font-size: 15px; font-weight: 700; padding: 4px 12px; border-radius: 999px; }
 .act-win.ok { background: rgba(80, 210, 130, 0.85); color: #04331b; }
 .act-win.no { background: rgba(255,255,255,0.12); color: var(--text-dim); font-weight: 500; }
+
+/* ---- Activity / season grid ---- */
+.act-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+@media (max-width: 400px) { .act-grid { grid-template-columns: repeat(2, 1fr); } }
+.ag-tile { background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: var(--radius-sm); padding: 12px 8px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; }
+.ag-emoji { font-size: 26px; }
+.ag-label { font-size: 13px; font-weight: 600; }
+.ag-verdict { font-size: 12px; color: var(--text-dim); }
+.ag-win { font-size: 11px; color: var(--text-faint); }
+.ag-tile.v-good { box-shadow: inset 0 0 0 1.5px rgba(80,210,130,0.45); }
+.ag-tile.v-na { opacity: 0.55; }
 
 /* ---- Bio-weather ---- */
 .bio { display: flex; flex-direction: column; }
@@ -415,7 +450,9 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 .overlay { position: fixed; inset: 0; z-index: 50; display: none; align-items: flex-start; justify-content: center; padding: 14vh 14px 14px; background: rgba(8,16,32,0.55); backdrop-filter: blur(6px); }
 .overlay.open { display: flex; animation: fade .2s ease; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
-.overlay-card { width: 100%; max-width: 480px; background: linear-gradient(160deg, rgba(40,60,95,0.96), rgba(24,38,64,0.97)); border: 1px solid var(--card-brd); border-radius: var(--radius); box-shadow: 0 20px 60px rgba(0,0,0,0.4); overflow: hidden; animation: pop .25s ease; }
+.overlay-card { width: 100%; max-width: 480px; background: linear-gradient(160deg, rgba(40,60,95,0.96), rgba(24,38,64,0.97)); border: 1px solid rgba(255,255,255,0.22); border-radius: var(--radius); box-shadow: 0 20px 60px rgba(0,0,0,0.4); overflow: hidden; animation: pop .25s ease;
+  /* overlays are always dark → keep light text regardless of the chosen theme */
+  color: #fff; --text: #fff; --text-dim: rgba(255,255,255,0.72); --text-faint: rgba(255,255,255,0.5); --card-brd: rgba(255,255,255,0.22); --card-bg-2: rgba(255,255,255,0.1); --hairline: rgba(255,255,255,0.08); }
 @keyframes pop { from { transform: translateY(16px) scale(0.98); opacity: 0; } to { transform: none; opacity: 1; } }
 .search-bar { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.1); }
 .search-ic { font-size: 18px; }
@@ -518,6 +555,38 @@ body[data-design="daylight"] .cloth-umb.no, body[data-design="sand"] .cloth-umb.
 
 /* Bigger touch target for chip remove */
 .chip-x { min-width: 24px; min-height: 24px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---- PWA polish: onboarding, update, offline, install, pull-to-refresh ---- */
+body { overscroll-behavior-y: contain; }
+.btn-block { display: block; width: 100%; margin-top: 10px; }
+.btn-ghost { background: rgba(255,255,255,0.16); color: var(--text); }
+.welcome-overlay { align-items: center; }
+.welcome-card { max-width: 380px; text-align: center; padding: 32px 24px; }
+.welcome-fox { font-size: 56px; filter: drop-shadow(0 4px 10px rgba(0,0,0,.3)); }
+.welcome-card h2 { font-size: 22px; margin: 10px 0 6px; }
+.welcome-card p { color: var(--text-dim); font-size: 14px; margin-bottom: 20px; line-height: 1.5; }
+.install-btn { margin-top: 4px; }
+.update-banner { position: fixed; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 62; background: #2b6fd8; color: #fff; border: none; border-radius: 999px; padding: 12px 20px; font-size: 14px; font-weight: 600; cursor: pointer; box-shadow: 0 8px 24px rgba(0,0,0,.35); max-width: calc(100% - 32px); }
+.update-banner:active { transform: translateX(-50%) scale(0.97); }
+.offline-banner { position: fixed; left: 0; right: 0; top: 0; z-index: 61; background: #c2622b; color: #fff; text-align: center; padding: calc(8px + env(safe-area-inset-top)) 12px 8px; font-size: 13px; font-weight: 600; }
+.ptr { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(0); margin-top: -46px; z-index: 58; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; transition: transform .15s ease; pointer-events: none; }
+.ptr-spin { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; }
+.ptr.ready .ptr-spin { border-top-color: var(--accent); }
+.ptr.spin .ptr-spin { animation: spin .8s linear infinite; }
+.saved-empty { cursor: pointer; }
+
+/* ---- Extras: streak, calendar, layout manager ---- */
+[data-huser] { display: none !important; }
+.streak-pill { display: inline-block; margin: -8px 2px 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,150,80,0.22); border: 1px solid rgba(255,180,120,0.35); font-size: 12.5px; font-weight: 700; }
+.ics-btn { margin-top: 14px; width: 100%; background: var(--card-bg-2); border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 12px; padding: 10px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.ics-btn:active { transform: scale(0.98); }
+.set-layout-head { border-bottom: none; padding-bottom: 2px; }
+.layout-list { padding: 0 16px 10px; }
+.layout-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--hairline); }
+.lay-move { width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--card-brd); background: var(--card-bg-2); color: var(--text); cursor: pointer; font-size: 14px; }
+.lay-move:disabled { opacity: .35; cursor: default; }
+.lay-name { flex: 1; font-size: 14px; }
+.lay-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
 
 /* =========================================================
    Animated weather SVG icons

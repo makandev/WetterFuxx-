@@ -11,7 +11,13 @@
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Wetterfux" />
   <meta name="mobile-web-app-capable" content="yes" />
+  <link rel="preconnect" href="https://api.open-meteo.com" />
+  <link rel="preconnect" href="https://air-quality-api.open-meteo.com" />
+  <link rel="preconnect" href="https://geocoding-api.open-meteo.com" />
+  <link rel="dns-prefetch" href="https://api.rainviewer.com" />
+  <link rel="dns-prefetch" href="https://api.brightsky.dev" />
   <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="./css/style.css" />
 </head>
@@ -39,6 +45,7 @@
     </header>
 
     <p id="tagline" class="tagline"></p>
+    <span id="streakPill" class="streak-pill" hidden></span>
 
     <!-- Saved place chips -->
     <section class="saved">
@@ -61,14 +68,45 @@
       </div>
     </section>
 
+    <!-- Quick answers -->
+    <section id="ask" class="card" hidden></section>
+
     <!-- Weather moment of the day -->
     <section id="moment" class="card moment" hidden></section>
 
     <!-- Clothing tip for today -->
     <section id="clothing" class="card clothing"></section>
 
+    <!-- Rain nowcast -->
+    <section id="nowcast" class="card nowcast" hidden></section>
+
+    <!-- Hourly (core forecast) -->
+    <section id="hourly" class="card"></section>
+
+    <!-- 14 day (core forecast) -->
+    <section id="daily" class="card"></section>
+
+    <!-- Detail tiles -->
+    <section id="details" class="card"></section>
+
+    <!-- Best time today -->
+    <section id="activity" class="card" hidden></section>
+
+    <!-- Activity / season check -->
+    <section id="activities" class="card" hidden></section>
+
     <!-- Family weather dashboard -->
     <section id="family" class="card family" hidden></section>
+
+    <!-- Place comparison -->
+    <section id="compare" class="card" hidden></section>
+
+    <div id="airbio" class="two-col">
+      <!-- Air quality -->
+      <section id="air" class="card" hidden></section>
+      <!-- Bio-weather & health -->
+      <section id="biowetter" class="card" hidden></section>
+    </div>
 
     <!-- Live rain radar map -->
     <section id="radar" class="card radar">
@@ -87,30 +125,8 @@
       <p id="radarHint" class="radar-note"></p>
     </section>
 
-    <!-- Rain nowcast -->
-    <section id="nowcast" class="card nowcast" hidden></section>
-
-    <!-- Best time today -->
-    <section id="activity" class="card" hidden></section>
-
-    <!-- Detail tiles -->
-    <section id="details" class="card"></section>
-
-    <!-- Hourly -->
-    <section id="hourly" class="card"></section>
-
-    <div class="two-col">
-      <!-- Air quality -->
-      <section id="air" class="card" hidden></section>
-      <!-- Bio-weather & health -->
-      <section id="biowetter" class="card" hidden></section>
-    </div>
-
     <!-- Sun & moon -->
     <section id="sunmoon" class="card"></section>
-
-    <!-- 14 day -->
-    <section id="daily" class="card"></section>
 
     <footer class="foot">
       <span id="updated"></span>
@@ -206,11 +222,36 @@
           </optgroup>
         </select>
       </label>
+      <div class="set-row set-layout-head">
+        <span id="layoutTitle">🧩 Karten anpassen</span>
+      </div>
+      <div id="layoutList" class="layout-list"></div>
+      <button id="btnInstall" class="btn btn-block install-btn" hidden>📲 App installieren</button>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
     </div>
   </div>
 
   <div id="toast" class="toast"></div>
+
+  <!-- Pull-to-refresh indicator -->
+  <div id="ptr" class="ptr" aria-hidden="true"><div class="ptr-spin"></div></div>
+
+  <!-- Update available -->
+  <button id="updateBanner" class="update-banner" hidden>🔄 Neue Version verfügbar – tippen zum Aktualisieren</button>
+
+  <!-- Offline notice -->
+  <div id="offlineBanner" class="offline-banner" role="status" hidden>📴 Offline – zeige zuletzt geladene Daten</div>
+
+  <!-- Welcome / onboarding -->
+  <div id="welcome" class="overlay welcome-overlay">
+    <div class="overlay-card welcome-card">
+      <div class="welcome-fox">🦊</div>
+      <h2 id="welcomeTitle">Willkommen bei Wetterfux</h2>
+      <p id="welcomeText">Kostenloses, professionelles Wetter für die ganze Familie.</p>
+      <button id="welcomeLocate" class="btn btn-block">📍 Standort verwenden</button>
+      <button id="welcomeSearch" class="btn btn-ghost btn-block">🔍 Ort suchen</button>
+    </div>
+  </div>
 
   <script src="./vendor/leaflet/leaflet.js"></script>
   <script type="module" src="./js/app.js"></script>

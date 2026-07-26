@@ -124,20 +124,28 @@ export async function getAlerts(lat, lon) {
   }
 }
 
-// Lightweight current conditions for the family dashboard
+// Lightweight current conditions for the family dashboard & comparison
 export async function getCurrentBrief(place, units = {}) {
   const tempUnit = units.temp === 'F' ? 'fahrenheit' : 'celsius';
+  const windUnit = units.wind === 'mph' ? 'mph' : units.wind === 'ms' ? 'ms' : 'kmh';
   try {
     const d = await getJSON(FORECAST, {
       latitude: place.lat, longitude: place.lon, timezone: 'auto',
-      temperature_unit: tempUnit,
-      current: ['temperature_2m', 'weather_code', 'is_day', 'apparent_temperature'],
+      temperature_unit: tempUnit, wind_speed_unit: windUnit,
+      current: ['temperature_2m', 'weather_code', 'is_day', 'apparent_temperature', 'wind_speed_10m'],
+      daily: ['temperature_2m_max', 'temperature_2m_min', 'precipitation_probability_max'],
+      forecast_days: 1,
     });
+    const dy = d.daily || {};
     return {
       temp: d.current.temperature_2m,
       feels: d.current.apparent_temperature,
       code: d.current.weather_code,
       isDay: d.current.is_day === 1,
+      wind: d.current.wind_speed_10m,
+      hi: dy.temperature_2m_max ? dy.temperature_2m_max[0] : null,
+      lo: dy.temperature_2m_min ? dy.temperature_2m_min[0] : null,
+      pop: dy.precipitation_probability_max ? dy.precipitation_probability_max[0] : null,
     };
   } catch {
     return null;
