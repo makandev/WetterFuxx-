@@ -56,8 +56,8 @@
 
     <!-- Swipeable pages -->
     <div class="pager" id="pager">
-      <!-- Tab 1: Heute -->
-      <div class="page" id="page-today" role="tabpanel" aria-label="Heute">
+      <!-- Tab 1: Heute — the full overview -->
+      <div class="page active-page" id="page-today" role="tabpanel" aria-label="Heute">
         <section class="hero card">
           <div id="heroIcon" class="hero-icon"></div>
           <div class="hero-main">
@@ -71,8 +71,16 @@
         <section id="moment" class="card moment" hidden></section>
         <section id="clothing" class="card clothing"></section>
         <section id="nowcast" class="card nowcast" hidden></section>
+        <section id="hourly" class="card"></section>
+        <section id="daily" class="card"></section>
+        <section id="details" class="card"></section>
         <section id="activity" class="card" hidden></section>
         <section id="activities" class="card" hidden></section>
+        <div id="airbio" class="two-col">
+          <section id="air" class="card" hidden></section>
+          <section id="biowetter" class="card" hidden></section>
+        </div>
+        <section id="sunmoon" class="card"></section>
         <footer class="foot">
           <span id="updated"></span>
           <span class="dot">·</span>
@@ -80,12 +88,9 @@
         </footer>
       </div>
 
-      <!-- Tab 2: Verlauf -->
+      <!-- Tab 2: Verlauf — extra detail + map -->
       <div class="page" id="page-history" role="tabpanel" aria-label="Verlauf">
         <section id="sixhour" class="card" hidden></section>
-        <section id="hourly" class="card"></section>
-        <section id="daily" class="card"></section>
-        <section id="details" class="card"></section>
         <section id="radar" class="card radar">
           <div class="card-title">🌧️ <span id="radarTitle">RegenRadar (live)</span></div>
           <div id="radar-map" class="radar-map"></div>
@@ -99,15 +104,10 @@
           </div>
           <p id="radarHint" class="radar-note"></p>
         </section>
-        <section id="sunmoon" class="card"></section>
       </div>
 
-      <!-- Tab 3: Gesundheit -->
+      <!-- Tab 3: Gesundheit — symptom diary -->
       <div class="page" id="page-health" role="tabpanel" aria-label="Gesundheit">
-        <div id="airbio" class="two-col">
-          <section id="air" class="card" hidden></section>
-          <section id="biowetter" class="card" hidden></section>
-        </div>
         <section id="journal" class="card" hidden></section>
       </div>
 
