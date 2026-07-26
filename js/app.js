@@ -392,7 +392,10 @@ function wireEvents() {
   $('#btnLocate').addEventListener('click', tryGeolocation);
   $('#btnStar').addEventListener('click', toggleStar);
   $('#btnShare').addEventListener('click', share);
-  $('#family').addEventListener('click', (e) => { if (e.target.closest('.fam-share')) shareFamily(); });
+  $('#family').addEventListener('click', (e) => {
+    if (e.target.closest('.fam-share')) shareFamily();
+    else if (e.target.closest('.fam-add-btn')) openSearch();
+  });
   $('#sunmoon').addEventListener('click', (e) => {
     const b = e.target.closest('.ics-btn');
     if (b) downloadICS(b.dataset.start, b.dataset.end, b.dataset.title);
