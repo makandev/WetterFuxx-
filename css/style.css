@@ -103,13 +103,40 @@ body[data-design="daylight"] .set-row select option,
 body[data-design="sand"] .set-row select option,
 body[data-design="mist"] .set-row select option { color: #16324f; }
 
-/* ---- Layout ---- */
+/* ---- Layout: app shell with swipeable pages + bottom tabs ---- */
 .app {
   position: relative; z-index: 2;
-  max-width: 680px;
-  margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 16px calc(40px + env(safe-area-inset-bottom));
+  max-width: 680px; margin: 0 auto;
+  height: 100vh; height: 100dvh;
+  display: flex; flex-direction: column;
 }
+.topbar { padding: max(12px, env(safe-area-inset-top)) 16px 8px; flex-shrink: 0; }
+.shared-head { padding: 0 16px; flex-shrink: 0; }
+.shared-head .saved { margin-bottom: 8px; }
+.pager {
+  flex: 1 1 auto; min-height: 0;
+  display: flex; overflow-x: auto; overflow-y: hidden;
+  scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.pager::-webkit-scrollbar { display: none; }
+.page {
+  flex: 0 0 100%; width: 100%;
+  scroll-snap-align: start; scroll-snap-stop: always;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 6px 16px calc(14px + env(safe-area-inset-bottom));
+  scrollbar-width: thin;
+}
+.tabbar {
+  flex-shrink: 0; display: flex;
+  border-top: 1px solid var(--hairline);
+  background: var(--card-bg); backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tab { flex: 1; background: none; border: none; color: var(--text-faint); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 7px; cursor: pointer; font: inherit; font-size: 11px; transition: color .2s ease; }
+.tab.active { color: var(--text); }
+.tab-ic { font-size: 20px; line-height: 1; }
+.tab-lb { font-weight: 600; }
 
 /* ---- Top bar ---- */
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
