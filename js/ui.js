@@ -20,11 +20,13 @@ export function renderAll(data, settings) {
   renderHeader(data.place);
   renderAlerts(data, settings);
   renderHero(data, settings);
+  renderAsk(data, settings);
   renderMoment(data, settings);
   renderClothing(data, settings);
   renderRadar(data);
   renderNowcast(data);
   renderActivity(data, settings);
+  renderActivities(data, settings);
   renderDetails(data, settings);
   renderHourly(data, settings);
   renderAir(data);
@@ -53,6 +55,37 @@ function renderHero(data, s) {
   $('#heroFeels').textContent = `${t('feelsLike')} ${tempStr(c.apparent_temperature)}`;
   $('#heroHiLo').innerHTML =
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
+}
+
+// ---- Quick answers ("Frag Wetterfux") ---------------------------------------
+function renderAsk(data, s) {
+  const box = $('#ask');
+  const en = getLang() === 'en';
+  const u = s.units;
+  const c = data.forecast.current;
+  const d = data.forecast.daily;
+  const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
+  const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
+  const psum = toMmU(d.precipitation_sum ? (d.precipitation_sum[0] || 0) : 0, precipUnit);
+  const RAIN = [51, 53, 55, 61, 63, 65, 80, 81, 82];
+  const umbrella = (pop >= 50 && psum >= 0.5) || psum >= 2 || RAIN.includes(c.weather_code) || RAIN.includes(d.weather_code[0]);
+  const jacket = toC(c.apparent_temperature, u.temp) < 14;
+  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
+  const cream = uv >= 3;
+  const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 5 && x.hour <= 8);
+  const scrape = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) <= 0 : false;
+
+  const pills = [
+    { e: '☂️', q: en ? 'Umbrella?' : 'Schirm?', a: umbrella },
+    { e: '🧥', q: en ? 'Jacket?' : 'Jacke?', a: jacket },
+    { e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: cream },
+    { e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: scrape },
+  ];
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🦊 ${en ? 'Ask Wetterfux' : 'Frag Wetterfux'}</div>
+    <div class="ask-row">${pills.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
+      <span class="ask-e" aria-hidden="true">${p.e}</span><span class="ask-q">${p.q}</span>
+      <b>${p.a ? (en ? 'Yes' : 'Ja') : (en ? 'No' : 'Nein')}</b></div>`).join('')}</div>`;
 }
 
 // ---- Weather moment of the day ----------------------------------------------
@@ -245,6 +278,80 @@ function bestWindow(hours, scoreFn) {
 }
 function pad2(n) { return String(n).padStart(2, '0'); }
 
+// ---- Activity / season check ("Heute gut für …") ----------------------------
+function renderActivities(data, s) {
+  const box = $('#activities');
+  const { hours, tomorrow } = pickActivityDay(data.forecast.hourly, s.units);
+  if (hours.length < 2) { box.hidden = true; return; }
+  const d = data.forecast.daily;
+  const u = s.units;
+  const en = getLang() === 'en';
+  const maxFeels = Math.max(...hours.map((h) => h.feels));
+  const SNOW = [71, 73, 75, 77, 85, 86];
+  const snowy = [data.forecast.current.weather_code, d.weather_code[0]].some((c) => SNOW.includes(c));
+  const tmin = toC(d.temperature_2m_min[0], u.temp);
+
+  const defs = [
+    { emoji: '🔥', label: en ? 'Barbecue' : 'Grillen', fn: grillScore, gate: maxFeels >= 16, note: en ? 'too cool' : 'zu kühl' },
+    { emoji: '🚴', label: en ? 'Cycling' : 'Radfahren', fn: bikeScore, gate: true },
+    { emoji: '🏊', label: en ? 'Swimming' : 'Baden', fn: swimScore, gate: maxFeels >= 22, note: en ? 'too cool' : 'zu kühl' },
+    { emoji: '⛷️', label: en ? 'Snow fun' : 'Schnee', fn: skiScore, gate: snowy, note: en ? 'no snow' : 'kein Schnee' },
+    { emoji: '🌱', label: en ? 'Gardening' : 'Garten', fn: gardenScore, gate: tmin > -3 },
+    { emoji: '📸', label: en ? 'Photos' : 'Fotografieren', fn: photoScore, gate: true },
+  ];
+
+  const tiles = defs.map((a) => {
+    if (!a.gate) return activityTile(a.emoji, a.label, 'na', a.note || '—', '');
+    const peak = Math.max(...hours.map(a.fn));
+    const verdict = peak >= 68 ? 'good' : peak >= 45 ? 'ok' : 'bad';
+    const vtext = verdict === 'good' ? (en ? 'great' : 'top') : verdict === 'ok' ? 'okay' : (en ? 'nope' : 'eher nicht');
+    const win = bestWindow(hours, a.fn);
+    const pre = tomorrow ? (en ? 'tmr ' : 'morgen ') : '';
+    const wtxt = verdict === 'bad' ? '' : (win ? (win.allDay ? (en ? 'all day' : 'ganztags') : `${pre}${win.from}–${win.to}`) : '');
+    return activityTile(a.emoji, a.label, verdict, vtext, wtxt);
+  }).join('');
+
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">✅ ${en ? 'Good today for …' : 'Heute gut für …'}</div><div class="act-grid">${tiles}</div>`;
+}
+function activityTile(emoji, label, verdict, vtext, win) {
+  const dot = verdict === 'good' ? '🟢' : verdict === 'ok' ? '🟡' : verdict === 'na' ? '⚪' : '🔴';
+  return `<div class="ag-tile v-${verdict}">
+    <span class="ag-emoji" aria-hidden="true">${emoji}</span>
+    <span class="ag-label">${label}</span>
+    <span class="ag-verdict">${dot} ${vtext}</span>
+    ${win ? `<span class="ag-win">${win}</span>` : ''}
+  </div>`;
+}
+function grillScore(x) {
+  if (x.hour < 11 || x.hour > 22) return 0;
+  let s = 100; s -= Math.abs(x.feels - 24) * 2.6;
+  if (x.precip > 0.05 || x.prob >= 45) s -= 60;
+  s -= Math.max(0, x.gust - 30) * 1.3; return s;
+}
+function bikeScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 16) * 3; s -= rainPenalty(x); s -= Math.max(0, x.gust - 40) * 1.3; return s;
+}
+function swimScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 28) * 3.4;
+  if (x.precip > 0.05 || x.prob >= 40) s -= 45;
+  s -= x.cloud * 0.15; s -= Math.max(0, x.gust - 25) * 1.2; return s;
+}
+function skiScore(x) {
+  let s = 100; s -= Math.abs(x.feels - (-3)) * 2.2; s -= Math.max(0, x.gust - 45) * 1.2; return s;
+}
+function gardenScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100; s -= Math.abs(x.feels - 18) * 2.6;
+  if (x.precip > 1) s -= 30; if (x.feels < 2) s -= 40; s -= Math.max(0, x.gust - 45); return s;
+}
+function photoScore(x) {
+  if (!x.isDay) return 0;
+  let s = 100 - x.cloud * 0.7; s -= rainPenalty(x); return s;
+}
+
 // ---- Bio-weather & health ----------------------------------------------------
 function renderBiowetter(data, s) {
   const box = $('#biowetter');
@@ -360,6 +467,39 @@ function flagEmoji(cc) {
   if (!cc || cc.length !== 2) return '📍';
   const A = 0x1f1e6;
   return String.fromCodePoint(A + cc.charCodeAt(0) - 65, A + cc.charCodeAt(1) - 65);
+}
+
+// ---- Place comparison --------------------------------------------------------
+export function renderCompare(places, briefs, settings) {
+  const box = $('#compare');
+  if (!box) return;
+  const pairs = places.map((p, i) => ({ p, w: briefs[i] })).filter((x) => x.w);
+  if (pairs.length < 2) { box.hidden = true; return; }
+  box.hidden = false;
+  const en = getLang() === 'en';
+  const wu = windUnitLabel(settings.units.wind);
+
+  // find warmest and driest for highlight badges
+  let warmest = -Infinity, driest = Infinity;
+  pairs.forEach(({ w }) => { if (w.temp > warmest) warmest = w.temp; if (w.pop != null && w.pop < driest) driest = w.pop; });
+
+  const cols = pairs.map(({ p, w }) => {
+    const badges = [];
+    if (w.temp === warmest) badges.push('🔥');
+    if (w.pop != null && w.pop === driest) badges.push('☀️');
+    return `<div class="cmp-col">
+      <div class="cmp-head"><span class="cmp-flag">${flagEmoji(p.country_code)}</span><span class="cmp-name">${escapeHtml(p.name)}</span></div>
+      <div class="cmp-ic">${weatherSVG(w.code, w.isDay)}</div>
+      <div class="cmp-temp">${tempStr(w.temp)} ${badges.join('')}</div>
+      <div class="cmp-row"><span>${en ? 'Feels' : 'Gefühlt'}</span><b>${tempStr(w.feels)}</b></div>
+      <div class="cmp-row"><span>${en ? 'Hi / Lo' : 'Hoch / Tief'}</span><b>${tempStr(w.hi)} / ${tempStr(w.lo)}</b></div>
+      <div class="cmp-row"><span>${en ? 'Rain' : 'Regen'}</span><b>${w.pop != null ? `${w.pop}%` : '–'}</b></div>
+      <div class="cmp-row"><span>${en ? 'Wind' : 'Wind'}</span><b>${num(w.wind)} ${wu}</b></div>
+    </div>`;
+  }).join('');
+
+  box.innerHTML = `<div class="card-title">⚖️ ${en ? 'Compare places' : 'Orte vergleichen'}</div>
+    <div class="cmp-scroll"><div class="cmp-grid">${cols}</div></div>`;
 }
 export function escapeHtml(str) {
   return String(str).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -642,7 +782,13 @@ function renderSunMoon(data) {
       <span class="moon-emoji">${moon.emoji}</span>
       <div><b>${moon.name}</b><span class="lbl">${t('moonPhase')} · ${moon.illum}%</span></div>
       <div class="daylen"><span class="lbl">${t('dayLength')}</span><b>${daylightStr(d.daylight_duration[0])}</b></div>
-    </div>`;
+    </div>
+    <button class="ics-btn" data-start="${floatStamp(new Date(ssT - 40 * 60000))}" data-end="${floatStamp(new Date(ssT))}"
+      data-title="${getLang() === 'en' ? 'Golden hour 📸' : 'Goldene Stunde 📸'}">📅 ${getLang() === 'en' ? 'Golden hour to calendar' : 'Goldene Stunde in Kalender'}</button>`;
+}
+function floatStamp(d) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}00`;
 }
 
 // ---- 14-day forecast ---------------------------------------------------------

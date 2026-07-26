@@ -24,7 +24,10 @@ Web-App (PWA) auf Handy, Tablet und Desktop.
 | **🖼️ Bild teilen** | Erzeugt eine hübsche Wetter-Bildkarte für WhatsApp/Stories (Web-Share) |
 | **🎨 8 Designs** | Aurora, Midnight, Nebula, Forest, Mono, Daylight, Sand, Mist |
 | **🦊 Personalisierung** | Fuchs-Maskottchen im Outfit, Kälteempfinden-Regler, Profile (Kind/Fahrrad) |
+| **🦊 Frag Wetterfux** | Schnellantworten: Schirm? Jacke? Sonnencreme? Morgen früh kratzen? |
 | **🕒 Beste Zeit heute** | Optimale Zeitfenster für Draußensein, Sport/Joggen und Wäschetrocknen |
+| **✅ Aktivitäts-Check** | Ampel für Grillen, Radfahren, Baden, Schnee, Garten, Fotografieren |
+| **⚖️ Orte vergleichen** | Gespeicherte Orte nebeneinander mit Markierung des wärmsten/trockensten |
 | **🧥 Kleidungstipp** | Konkrete Empfehlung aus Temperatur, Regen, Wind, UV, Glätte & Tag/Nacht-Schwankung |
 | **🧪 Biowetter & Gesundheit** | Luftdruck-Tendenz, Kopfschmerz-Reiz, Kreislaufbelastung, Schwüle, Erkältungswetter |
 | **Luftqualität** | Europäischer Luftqualitätsindex (AQI), PM2.5, PM10, Ozon, NO₂ |
@@ -32,7 +35,8 @@ Web-App (PWA) auf Handy, Tablet und Desktop.
 | **Sonne & Mond** | Sonnenauf-/untergang mit Tagesbogen, Tageslänge, Mondphase |
 | **Details** | UV-Index mit Empfehlung, Taupunkt, Luftfeuchte, Luftdruck, Sicht, Wind-Kompass |
 | **Komfort** | Mehrere Orte speichern · GPS-Standort · Suche · °C/°F · km/h/mph/m/s · DE/EN · Hell/Dunkel |
-| **Teilen** | Orte per Link mit der Familie teilen · installierbar (Startbildschirm) · offline-fähig |
+| **Teilen** | Orte/Bildkarte per Link teilen · ganzes Familien-Set teilen |
+| **📲 App** | Installierbar (Startbildschirm) · offline-fähig · Pull-to-Refresh · Update-Hinweis · freundliches Onboarding |
 
 Die Oberfläche passt Farben und Animationen dynamisch ans Wetter und die Tageszeit an
 (Sonnenstrahlen, ziehende Wolken, Regen, Schnee, Sternenhimmel bei Nacht).
