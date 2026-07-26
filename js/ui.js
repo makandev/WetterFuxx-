@@ -6,8 +6,11 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
-import { loadJournal, addJournalEntry, removeJournalEntry } from './store.js';
-import { SYMPTOMS, symptomLabel, symptomEmoji, buildInsights, personalRisk } from './journal.js';
+import {
+  loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
+  loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
+} from './store.js';
+import { SYMPTOMS, symptomLabel, symptomEmoji, buildInsights, extraInsights, personalRisk } from './journal.js';
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
@@ -399,26 +402,67 @@ function bioRow(icon, label, value, sub) {
 }
 
 // ---- Symptom journal (personal bio-weather) ---------------------------------
-function journalSnapshot(data) {
+function journalSnapshot(data, s) {
   const h = data.forecast.hourly;
+  const d = data.forecast.daily;
   const idx = currentHourIndex(h);
   const c = data.forecast.current;
+  const unit = s ? s.units.temp : 'C';
   const p = h.pressure_msl ? h.pressure_msl[idx] : (c.pressure_msl || null);
   const p12 = (h.pressure_msl && idx >= 12) ? +(h.pressure_msl[idx] - h.pressure_msl[idx - 12]).toFixed(1) : null;
   const p3 = (h.pressure_msl && idx >= 3) ? +(h.pressure_msl[idx] - h.pressure_msl[idx - 3]).toFixed(1) : null;
-  return { pressure: p != null ? Math.round(p) : null, p12, p3, temp: Math.round(c.temperature_2m), hum: c.relative_humidity_2m, code: c.weather_code };
+  const tC = toC(c.temperature_2m, unit);
+  const dew = dewC(tC, c.relative_humidity_2m || 60);
+  const swing = (d.temperature_2m_max && d.temperature_2m_min)
+    ? +(toC(d.temperature_2m_max[0], unit) - toC(d.temperature_2m_min[0], unit)).toFixed(1) : null;
+  return {
+    pressure: p != null ? Math.round(p) : null, p12, p3,
+    temp: Math.round(c.temperature_2m), hum: c.relative_humidity_2m, code: c.weather_code,
+    dew: +dew.toFixed(1), muggy: dew >= 16, swing,
+  };
+}
+function dewC(tC, rh) {
+  const a = 17.27, b = 237.7;
+  const g = (a * tC) / (b + tC) + Math.log(Math.max(1, rh) / 100);
+  return (b * g) / (a - g);
+}
+function journalChart(entries) {
+  const es = [...entries].sort((a, b) => a.ts - b.ts).slice(-14);
+  if (es.length < 2) return '';
+  const cw = 22, h = 64;
+  const bars = es.map((e, i) => {
+    const bh = 8 + e.intensity * 9;
+    const x = i * cw + 5, y = h - bh;
+    const p = e.wx && typeof e.wx.p12 === 'number' ? e.wx.p12 : 0;
+    const col = p < -2 ? '#6aa8ff' : p > 2 ? '#ff9a4d' : '#9aa6b8';
+    return `<rect x="${x}" y="${y}" width="12" height="${bh}" rx="2" fill="${col}"/>`;
+  }).join('');
+  const w = es.length * cw;
+  return `<svg class="jr-chart" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${bars}</svg>`;
 }
 function renderJournal(data, s) {
   const box = $('#journal');
   if (!box) return;
   const en = getLang() === 'en';
-  const entries = loadJournal();
-  const snap = journalSnapshot(data);
+  const profiles = loadProfiles();
+  const active = getActiveProfile();
+  const all = loadJournal();
+  const entries = all.filter((e) => (e.profileId || 'me') === active);
+  const snap = journalSnapshot(data, s);
   const ins = buildInsights(entries, en);
+  const extra = extraInsights(entries, en);
   const risk = personalRisk(entries, snap, en);
+  const insightLines = [ins ? ins.text : null, ...extra].filter(Boolean);
+
+  const profChips = profiles.map((p) =>
+    `<button class="jr-prof${p.id === active ? ' on' : ''}" data-pid="${p.id}">${escapeHtml(p.name)}${p.id !== 'me' && p.id === active ? ` <span class="jr-prof-x" data-del-pid="${p.id}">×</span>` : ''}</button>`).join('')
+    + `<button class="jr-prof jr-prof-add" aria-label="${en ? 'add person' : 'Person hinzufügen'}">＋</button>`;
 
   const symBtns = SYMPTOMS.map((sy) => `<button class="jr-sym" data-key="${sy.key}">${sy.emoji}<span>${en ? sy.en : sy.de}</span></button>`).join('');
   const intBtns = [1, 2, 3, 4, 5].map((n) => `<button class="jr-int" data-int="${n}">${n}</button>`).join('');
+  const chart = entries.length >= 2
+    ? `<div class="jr-chartwrap">${journalChart(entries)}<div class="jr-chart-legend"><span><i style="background:#6aa8ff"></i>${en ? 'falling' : 'fallend'}</span><span><i style="background:#9aa6b8"></i>${en ? 'steady' : 'gleich'}</span><span><i style="background:#ff9a4d"></i>${en ? 'rising' : 'steigend'}</span></div></div>`
+    : '';
   const list = entries.slice(0, 8).map((e) => {
     const d = new Date(e.ts);
     const when = d.toLocaleDateString(en ? 'en-GB' : 'de-DE', { day: 'numeric', month: 'short' }) + ' ' + d.toLocaleTimeString(en ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -432,8 +476,10 @@ function renderJournal(data, s) {
 
   box.hidden = false;
   box.innerHTML = `<div class="card-title">🩺 ${en ? 'Symptom diary' : 'Symptom-Tagebuch'}</div>
+    <div class="jr-profiles">${profChips}</div>
     ${risk ? `<div class="jr-risk"><span class="badge ${riskCls}">${en ? 'Today for you' : 'Heute für dich'}</span> ${risk.text}</div>` : ''}
-    ${ins ? `<div class="jr-insight">📊 ${ins.text}</div>` : ''}
+    ${insightLines.length ? `<div class="jr-insight">📊 ${insightLines.join('<br>')}</div>` : ''}
+    ${chart}
     <button class="jr-add-btn">➕ ${en ? 'New entry' : 'Neuer Eintrag'}</button>
     <div class="jr-form" hidden>
       <div class="jr-syms">${symBtns}</div>
@@ -442,9 +488,30 @@ function renderJournal(data, s) {
       <div class="jr-actions"><button class="jr-cancel">${en ? 'Cancel' : 'Abbrechen'}</button><button class="jr-save" disabled>${en ? 'Save' : 'Speichern'}</button></div>
     </div>
     ${entries.length ? `<div class="jr-list">${list}</div>` : `<p class="jr-empty">${en ? 'No entries yet. Log how you feel and Wetterfux learns how your body reacts to the weather.' : 'Noch keine Einträge. Trag ein, wie du dich fühlst – Wetterfux lernt, wie dein Körper auf Wetter reagiert.'}</p>`}
+    <div class="jr-tools">
+      <button class="jr-export">⬇️ Export</button>
+      ${all.length ? `<button class="jr-clear">🗑️ ${en ? 'Clear all' : 'Alle löschen'}</button>` : ''}
+    </div>
     <p class="jr-disc">🔒 ${en ? 'Local & private · not medical advice' : 'Lokal & privat · keine medizinische Diagnose'}</p>`;
 
-  // interactions
+  const rerender = () => renderJournal(data, s);
+
+  // profiles
+  box.querySelectorAll('.jr-prof').forEach((b) => {
+    if (b.classList.contains('jr-prof-add')) {
+      b.addEventListener('click', () => {
+        const name = prompt(en ? 'Name of the person' : 'Name der Person');
+        if (name && name.trim()) { addProfile(name.trim()); rerender(); }
+      });
+    } else {
+      b.addEventListener('click', (ev) => {
+        if (ev.target.classList.contains('jr-prof-x')) { removeProfile(ev.target.dataset.delPid); rerender(); return; }
+        setActiveProfile(b.dataset.pid); rerender();
+      });
+    }
+  });
+
+  // add-entry form
   let selSym = null, selInt = null;
   const form = box.querySelector('.jr-form');
   const saveBtn = box.querySelector('.jr-save');
@@ -464,13 +531,25 @@ function renderJournal(data, s) {
   saveBtn.addEventListener('click', () => {
     if (!selSym || !selInt) return;
     const note = box.querySelector('.jr-note').value.trim().slice(0, 80);
-    addJournalEntry({ id: `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, ts: Date.now(), type: selSym, intensity: selInt, note, wx: snap });
-    renderJournal(data, s);
+    addJournalEntry({ id: `${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`, ts: Date.now(), profileId: active, type: selSym, intensity: selInt, note, wx: snap });
+    rerender();
   });
-  box.querySelectorAll('.jr-del').forEach((b) => b.addEventListener('click', () => {
-    removeJournalEntry(b.dataset.id);
-    renderJournal(data, s);
-  }));
+  box.querySelectorAll('.jr-del').forEach((b) => b.addEventListener('click', () => { removeJournalEntry(b.dataset.id); rerender(); }));
+
+  // tools: export + clear
+  box.querySelector('.jr-export').addEventListener('click', () => downloadText(exportJournal(), 'wetterfux-tagebuch.json', 'application/json'));
+  const clearBtn = box.querySelector('.jr-clear');
+  if (clearBtn) clearBtn.addEventListener('click', () => {
+    if (confirm(en ? 'Delete ALL journal entries?' : 'Wirklich ALLE Tagebuch-Einträge löschen?')) { clearJournal(); rerender(); }
+  });
+}
+function downloadText(text, filename, type) {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ---- Warnings: official DWD (Bright Sky) with local fallback -----------------
