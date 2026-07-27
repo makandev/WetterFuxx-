@@ -10,7 +10,7 @@ import { renderAll, renderFamily, renderCompare, escapeHtml } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
   placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
-  bumpStreak, getStreak,
+  bumpStreak, getStreak, openedOn,
 } from './store.js';
 import { buildShareBlob } from './sharecard.js';
 
@@ -27,9 +27,11 @@ async function boot() {
   initEffects($('#bg-canvas'));
   wireEvents();
   wireTabs();
+  wireThemePicker();
   renderSavedChips();
   renderStreak();
   applyLayout();
+  maybeShowThemePicker(); // first visit → let people pick a look right away
 
   // 0) shared family set  1) shared single place  2) last used  3) geolocation  4) default
   const fam = familyFromParams(location.search);
@@ -103,6 +105,10 @@ function applyStaticText() {
   $('#offlineBanner').textContent = t('offlineNote');
   $('#btnInstall').textContent = t('installApp');
   $('#layoutTitle').textContent = getLang() === 'en' ? '🧩 Customize cards' : '🧩 Karten anpassen';
+  const enL = getLang() === 'en';
+  $('#themeTitle').textContent = enL ? '🎨 Choose your look' : '🎨 Wähle dein Design';
+  $('#themeSub').textContent = enL ? 'Tap to preview – you can change it anytime.' : 'Tippe zum Vorschauen – du kannst es jederzeit ändern.';
+  $('#themeDone').textContent = enL ? 'Let’s go' : 'Los geht’s';
   document.title = `${t('appName')} · ${t('tagline')}`;
 }
 
@@ -348,9 +354,9 @@ function onSettingChange(e) {
 }
 
 function applyTheme(design) {
-  const d = design === 'auto'
-    ? (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'daylight' : 'aurora')
-    : design;
+  // "auto" maps to the balanced Aurora (dark) — light themes looked too bright
+  // on many desktop screens; users can still pick a light theme explicitly.
+  const d = (!design || design === 'auto') ? 'aurora' : design;
   document.body.dataset.design = d;
   updateThemeColor();
 }
@@ -418,37 +424,70 @@ function isTyping() {
   return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
 }
 
-// ---- Daily streak ------------------------------------------------------------
+// ---- Daily streak (a proper little widget) -----------------------------------
 function renderStreak() {
   const s = bumpStreak();
+  const en = getLang() === 'en';
+  // keep the tiny header pill for at-a-glance, hide it on day 1
   const pill = $('#streakPill');
-  if (!pill) return;
-  if (s.count >= 2) {
-    pill.hidden = false;
-    const days = getLang() === 'en' ? 'days in a row' : 'Tage in Folge';
-    pill.textContent = `🔥 ${s.count} ${days}`;
-    pill.title = getLang() === 'en' ? `Best: ${s.best}` : `Bestwert: ${s.best}`;
-  } else {
-    pill.hidden = true;
+  if (pill) {
+    if (s.count >= 2) { pill.hidden = false; pill.textContent = `🔥 ${s.count}`; pill.title = en ? `Best: ${s.best}` : `Bestwert: ${s.best}`; }
+    else pill.hidden = true;
   }
+  const box = $('#streakCard');
+  if (!box) return;
+  box.hidden = false;
+
+  // 7-day tracker (Mon..today), filled if the app was opened that day
+  const now = new Date();
+  const dots = [];
+  for (let i = 6; i >= 0; i--) {
+    const day = new Date(now.getTime() - i * 86400000);
+    const opened = openedOn(day) || i === 0; // today counts (just bumped)
+    const wd = (en ? ['S', 'M', 'T', 'W', 'T', 'F', 'S'] : ['S', 'M', 'D', 'M', 'D', 'F', 'S'])[day.getDay()];
+    dots.push(`<div class="sk-day"><span class="sk-dot ${opened ? 'on' : ''}">${opened ? '🔥' : ''}</span><span class="sk-wd">${wd}</span></div>`);
+  }
+  let motiv;
+  if (s.count >= 2 && s.count === s.best) motiv = en ? `🎉 New record — ${s.count} days!` : `🎉 Neuer Rekord — ${s.count} Tage!`;
+  else if (s.best > s.count) motiv = en ? `${s.best - s.count + 1} more to beat your record of ${s.best}.` : `Noch ${s.best - s.count + 1} bis zu deinem Rekord von ${s.best}.`;
+  else if (s.count === 1) motiv = en ? 'Day 1 — come back tomorrow to build your streak!' : 'Tag 1 — komm morgen wieder für deine Serie!';
+  else motiv = en ? 'Keep it going!' : 'Bleib dran!';
+
+  box.innerHTML = `
+    <div class="sk-head">
+      <div class="sk-flame">🔥<span class="sk-count">${s.count}</span></div>
+      <div class="sk-txt">
+        <b>${en ? 'Day streak' : 'Tage-Serie'}</b>
+        <span class="sk-best">${en ? 'Best' : 'Rekord'}: ${s.best} 🏆</span>
+      </div>
+    </div>
+    <div class="sk-week">${dots.join('')}</div>
+    <div class="sk-motiv">${motiv}</div>`;
 }
 
 // ---- Calendar (.ics) for golden hour ----------------------------------------
-function downloadICS(startStamp, endStamp, title) {
-  const stampNoTz = startStamp; // floating local time
-  const uid = `wetterfux-${startStamp}@wetterfux`;
+async function downloadICS(startStamp, endStamp, title) {
+  const dtstamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const uid = `wetterfux-${startStamp}-${Math.floor(Math.random() * 1e6)}@wetterfux`;
   const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wetterfux//DE', 'BEGIN:VEVENT',
-    `UID:${uid}`, `DTSTART:${startStamp}`, `DTEND:${endStamp}`,
-    `SUMMARY:${title}`, 'DESCRIPTION:Wetterfux', 'END:VEVENT', 'END:VCALENDAR',
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Wetterfux//DE', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    'BEGIN:VEVENT', `UID:${uid}`, `DTSTAMP:${dtstamp}`, `DTSTART:${startStamp}`, `DTEND:${endStamp}`,
+    `SUMMARY:${title}`, 'DESCRIPTION:Wetterfux', 'BEGIN:VALARM', 'TRIGGER:-PT15M', 'ACTION:DISPLAY',
+    `DESCRIPTION:${title}`, 'END:VALARM', 'END:VEVENT', 'END:VCALENDAR', '',
   ].join('\r\n');
-  const blob = new Blob([ics], { type: 'text/calendar' });
-  const url = URL.createObjectURL(blob);
+  const file = new File([ics], 'goldene-stunde.ics', { type: 'text/calendar' });
+  // On phones, sharing the file lets the OS offer "Add to calendar"
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title });
+      return;
+    }
+  } catch { /* fall back to download */ }
+  const url = URL.createObjectURL(file);
   const a = document.createElement('a');
   a.href = url; a.download = 'goldene-stunde.ics';
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  void stampNoTz;
 }
 
 // ---- Dashboard layout (order + hidden) --------------------------------------
@@ -515,6 +554,46 @@ function buildLayoutList() {
     settings.layout.hidden = h;
     saveSettings(settings); applyLayout();
   }));
+}
+
+// ---- First-visit theme picker ------------------------------------------------
+const THEME_SWATCHES = [
+  { id: 'aurora', name: 'Aurora', c: ['#6db3ff', '#16324f'], dot: '#ffd479' },
+  { id: 'midnight', name: 'Midnight', c: ['#26406e', '#080f22'], dot: '#7cc4ff' },
+  { id: 'nebula', name: 'Nebula', c: ['#7a2a9a', '#2a0f3a'], dot: '#f5a8e0' },
+  { id: 'forest', name: 'Forest', c: ['#1e5a3a', '#0a2016'], dot: '#ffcf6e' },
+  { id: 'mono', name: 'Mono', c: ['#3a3f46', '#15171b'], dot: '#e6e8ec' },
+  { id: 'matrix', name: 'Matrix', c: ['#053d17', '#000600'], dot: '#39ff88' },
+  { id: 'bitcoin', name: 'Bitcoin', c: ['#3a2606', '#0e0a02'], dot: '#f7931a' },
+  { id: 'daylight', name: 'Daylight', c: ['#cfe4ff', '#a9c9f5'], dot: '#e8820c' },
+  { id: 'sand', name: 'Sand', c: ['#f5e6cf', '#e6c9a0'], dot: '#c25a2b' },
+  { id: 'mist', name: 'Mist', c: ['#e8edf3', '#cbd4de'], dot: '#3a6ea5' },
+];
+function buildThemePicker() {
+  const grid = $('#themeGrid');
+  if (!grid) return;
+  grid.innerHTML = THEME_SWATCHES.map((tm) => `
+    <button class="tp-swatch${settings.theme === tm.id ? ' sel' : ''}" data-theme="${tm.id}" style="background:linear-gradient(150deg, ${tm.c[0]}, ${tm.c[1]})">
+      <span class="tp-dot" style="background:${tm.dot}"></span><span class="tp-name">${tm.name}</span>
+    </button>`).join('');
+  grid.querySelectorAll('.tp-swatch').forEach((b) => b.addEventListener('click', () => {
+    settings.theme = b.dataset.theme;
+    applyTheme(b.dataset.theme);
+    saveSettings(settings);
+    grid.querySelectorAll('.tp-swatch').forEach((x) => x.classList.toggle('sel', x === b));
+  }));
+}
+function showThemePicker() { buildThemePicker(); $('#themePicker').classList.add('open'); }
+function maybeShowThemePicker() {
+  try { if (localStorage.getItem('wf.themePicked')) return; } catch { return; }
+  showThemePicker();
+}
+function wireThemePicker() {
+  const done = $('#themeDone');
+  if (done) done.addEventListener('click', () => {
+    try { localStorage.setItem('wf.themePicked', '1'); } catch { /* private mode */ }
+    $('#themePicker').classList.remove('open');
+  });
 }
 
 // ---- Onboarding wiring -------------------------------------------------------

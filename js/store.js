@@ -131,16 +131,23 @@ function ymd(d) { return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
 export function bumpStreak() {
   const now = new Date();
   const today = ymd(now);
-  const s = read(KEY_STREAK, { last: null, count: 0, best: 0 });
+  const s = read(KEY_STREAK, { last: null, count: 0, best: 0, history: [] });
+  if (!Array.isArray(s.history)) s.history = [];
   if (s.last === today) return s;
   const yesterday = ymd(new Date(now.getTime() - 86400000));
   s.count = s.last === yesterday ? (s.count || 0) + 1 : 1;
   s.last = today;
   s.best = Math.max(s.best || 0, s.count);
+  s.history.push(today);
+  if (s.history.length > 40) s.history = s.history.slice(-40);
   write(KEY_STREAK, s);
   return s;
 }
-export function getStreak() { return read(KEY_STREAK, { last: null, count: 0, best: 0 }); }
+export function getStreak() { return read(KEY_STREAK, { last: null, count: 0, best: 0, history: [] }); }
+export function openedOn(date) {
+  const s = getStreak();
+  return Array.isArray(s.history) && s.history.includes(ymd(date));
+}
 
 // ---- Symptom journal ---------------------------------------------------------
 const KEY_JOURNAL = 'wf.journal.v1';
