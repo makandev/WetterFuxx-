@@ -1,26 +1,105 @@
 // api.js — Open-Meteo integration (free, no API key, no tracking)
 
 const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
+const PHOTON = 'https://photon.komoot.io/api/'; // OSM autocomplete (districts, addresses, ZIP)
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 const AIR = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const REVERSE = 'https://api.bigdatacloud.net/data/reverse-geocode-client';
 const ALERTS = 'https://api.brightsky.dev/alerts'; // official DWD warnings (DE/AT/…)
 
-async function getJSON(url, params) {
+async function getJSON(url, params, signal) {
   const u = new URL(url);
   if (params) Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) u.searchParams.set(k, Array.isArray(v) ? v.join(',') : v);
   });
-  const res = await fetch(u.toString(), { headers: { Accept: 'application/json' } });
+  const res = await fetch(u.toString(), { headers: { Accept: 'application/json' }, signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
 // Search places by name → [{id,name,admin1,country,country_code,lat,lon,tz}]
-export async function searchPlaces(query, lang = 'de') {
-  if (!query || query.trim().length < 2) return [];
-  const data = await getJSON(GEO, { name: query.trim(), count: 8, language: lang, format: 'json' });
+// Primary: Photon (OSM) → finds districts, streets/addresses and postal codes,
+// with an optional location bias so results near the current place rank first.
+// Fallback: Open-Meteo geocoding (cities only) when Photon is unavailable.
+export async function searchPlaces(query, lang = 'de', bias = null, signal) {
+  const q = (query || '').trim();
+  if (q.length < 2) return [];
+  const params = { q, limit: 8 };
+  if (['de', 'en', 'fr', 'it'].includes(lang)) params.lang = lang;
+  if (bias && Number.isFinite(bias.lat) && Number.isFinite(bias.lon)) {
+    params.lat = bias.lat;
+    params.lon = bias.lon;
+    params.location_bias_scale = 0.3; // gently prefer nearby (e.g. "within Hamburg")
+  }
+  try {
+    const data = await getJSON(PHOTON, params, signal);
+    const list = dedupePlaces((data.features || []).map(normalizePhoton).filter(Boolean));
+    if (list.length) return list;
+  } catch (e) {
+    if (e.name === 'AbortError') throw e;
+    // fall through to the Open-Meteo fallback below
+  }
+  if (/^\d+$/.test(q)) return []; // a bare postcode with no Photon hit → nothing useful from Open-Meteo
+  try {
+    return await searchPlacesOpenMeteo(q, lang);
+  } catch {
+    return [];
+  }
+}
+
+// Open-Meteo geocoding (cities/towns only) — used as a fallback.
+async function searchPlacesOpenMeteo(query, lang = 'de') {
+  const data = await getJSON(GEO, { name: query, count: 8, language: lang, format: 'json' });
   return (data.results || []).map(normalizePlace);
+}
+
+// Map one Photon GeoJSON feature → our place model. Coordinates are [lon, lat].
+function normalizePhoton(f) {
+  const p = f.properties || {};
+  const c = (f.geometry || {}).coordinates || [];
+  const lon = c[0], lat = c[1];
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  const name = photonName(p);
+  if (!name) return null;
+  return {
+    id: p.osm_id ? `photon:${p.osm_type || ''}${p.osm_id}` : `geo:${lat.toFixed(4)},${lon.toFixed(4)}`,
+    name,
+    admin1: photonContext(p, name),
+    country: p.country || '',
+    country_code: (p.countrycode || '').toUpperCase(),
+    lat, lon, tz: 'auto',
+  };
+}
+
+// The primary label: a named place, else a street(+number), else postcode/city.
+function photonName(p) {
+  if (p.name) return p.name;
+  if (p.street) return p.housenumber ? `${p.street} ${p.housenumber}` : p.street;
+  return p.postcode || p.city || p.district || p.county || p.state || p.country || '';
+}
+
+// The secondary context line, e.g. "Hamburg" for a district, "20249, Hamburg" for a street.
+function photonContext(p, name) {
+  const parts = [];
+  const add = (v) => { if (v && v !== name && !parts.includes(v)) parts.push(v); };
+  if (p.housenumber || p.street) { add(p.postcode); add(p.district); add(p.city); }
+  else { add(p.district); add(p.city); }
+  add(p.state);
+  if (!parts.length) { add(p.county); add(p.country); }
+  return parts.slice(0, 2).join(', ');
+}
+
+// Drop near-identical hits (same rounded coordinates + name) that OSM often returns.
+function dedupePlaces(list) {
+  const seen = new Set();
+  const out = [];
+  for (const r of list) {
+    const key = `${r.lat.toFixed(4)},${r.lon.toFixed(4)}|${(r.name || '').toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
 }
 
 // Reverse geocode coordinates → a place label
