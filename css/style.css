@@ -165,17 +165,16 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
   .pager { order: 3; display: block; overflow: visible; scroll-snap-type: none; }
   .page { display: none; width: 100%; height: auto; overflow: visible; padding: 14px 24px 40px; }
   .page.active-page { display: block; }
-  /* Heute → clean CSS grid dashboard (no overlap) */
-  #page-today.active-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
-  #page-today.active-page > * { margin-bottom: 0; min-width: 0; }
-  #page-today .hero.card, #page-today .foot { grid-column: 1 / -1; }
-  #page-today #airbio { display: grid; grid-template-columns: 1fr; gap: 18px; }
+  /* Heute → true masonry (JS packs cards into columns, no gaps, no overlap) */
+  #page-today .hero.card { margin-bottom: 18px; }
+  #page-today #airbio { display: block; }
+  .masonry { display: flex; gap: 18px; align-items: flex-start; }
+  .mcol { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 18px; }
+  .mcol > * { margin-bottom: 0 !important; }
+  .masonry + .foot { margin-top: 24px; }
   /* Other tabs → comfortable single column */
   .page:not(#page-today).active-page { max-width: 760px; margin: 0 auto; }
   .radar-map { height: 420px; }
-}
-@media (min-width: 1500px) {
-  #page-today.active-page { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ---- Top bar ---- */
