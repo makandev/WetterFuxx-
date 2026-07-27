@@ -79,18 +79,27 @@ function renderAsk(data, s) {
   const jacket = toC(c.apparent_temperature, u.temp) < 14;
   const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
   const cream = uv >= 3;
+  const tmax = toC(d.temperature_2m_max[0], u.temp);
+  // frost potential for tomorrow morning (5–8h) → only then is "scrape" relevant
   const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 5 && x.hour <= 8);
-  const scrape = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) <= 0 : false;
+  const tomAmMin = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) : null;
+  const frostRelevant = tomAmMin != null && tomAmMin <= 3; // cold season only
+  const warm = tmax >= 24;
 
+  // Always: umbrella + jacket. Then fill with seasonal/contextual answers.
   const pills = [
     { e: '☂️', q: en ? 'Umbrella?' : 'Schirm?', a: umbrella },
     { e: '🧥', q: en ? 'Jacket?' : 'Jacke?', a: jacket },
-    { e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: cream },
-    { e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: scrape },
   ];
+  if (frostRelevant) pills.push({ e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: tomAmMin <= 0 });
+  if (warm) pills.push({ e: '🏊', q: en ? 'Swim?' : 'Baden?', a: tmax >= 27 && pop < 40 });
+  if (cream) pills.push({ e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: true });
+  if (warm && pills.length < 4) pills.push({ e: '🍦', q: en ? 'Ice cream?' : 'Eiswetter?', a: tmax >= 25 });
+  if (!frostRelevant && !warm && pills.length < 4) pills.push({ e: '😎', q: en ? 'Sunglasses?' : 'Sonnenbrille?', a: uv >= 3 });
+  const shown = pills.slice(0, 4);
   box.hidden = false;
   box.innerHTML = `<div class="card-title">🦊 ${en ? 'Ask Wetterfux' : 'Frag Wetterfux'}</div>
-    <div class="ask-row">${pills.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
+    <div class="ask-row">${shown.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
       <span class="ask-e" aria-hidden="true">${p.e}</span><span class="ask-q">${p.q}</span>
       <b>${p.a ? (en ? 'Yes' : 'Ja') : (en ? 'No' : 'Nein')}</b></div>`).join('')}</div>`;
 }
@@ -602,7 +611,21 @@ function sevInfo(sev) {
 export function renderFamily(places, currents, activeId) {
   const box = $('#family');
   if (!box) return;
-  if (!places || places.length < 2) { box.hidden = true; return; }
+  const en = getLang() === 'en';
+  // Explain what this tab is (and how to fill it) instead of leaving it blank
+  if (!places || places.length < 2) {
+    box.hidden = false;
+    const n = places ? places.length : 0;
+    const hint = n === 0
+      ? (en ? 'Save your loved ones’ places (tap the star after searching) and see everyone’s weather here at a glance – plus compare them side by side.'
+            : 'Speichere die Orte deiner Liebsten (nach der Suche auf den Stern tippen). Hier siehst du dann alle auf einen Blick – und kannst sie vergleichen.')
+      : (en ? 'Add one more place to compare and see the whole family’s weather here.'
+            : 'Füge noch einen Ort hinzu, um zu vergleichen und das Wetter der ganzen Familie hier zu sehen.');
+    box.innerHTML = `<div class="card-title">👪 ${t('family')}</div>
+      <p class="fam-empty">${hint}</p>
+      <button class="fam-add-btn">🔍 ${en ? 'Add a place' : 'Ort hinzufügen'}</button>`;
+    return;
+  }
   box.hidden = false;
   const rows = places.map((p, i) => {
     const w = currents[i];
