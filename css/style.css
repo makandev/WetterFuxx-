@@ -98,6 +98,21 @@ body[data-design="mist"] {
   --sky-tint: linear-gradient(160deg, rgba(240,243,247,0.72), rgba(220,226,234,0.62));
   --text-shadow: none; --hairline: rgba(40,55,70,0.12); --shadow: 0 8px 26px rgba(60,80,100,0.14);
 }
+/* Special dark themes — full background override for a cohesive look */
+body[data-design="matrix"] {
+  --card-bg: rgba(0,55,18,0.18); --card-brd: rgba(60,255,120,0.30); --card-bg-2: rgba(0,55,18,0.12);
+  --accent: #ffcf33; --text: #86ffab; --text-dim: rgba(130,255,170,0.74); --text-faint: rgba(130,255,170,0.5);
+  --sky-a: #0a4a24; --sky-b: #03200e; --sky-c: #000600; --sky-tint: transparent;
+  --hairline: rgba(60,255,120,0.16); --text-shadow: 0 0 10px rgba(60,255,120,0.35);
+}
+body[data-design="matrix"] .brand-mark, body[data-design="matrix"] .hero-desc { text-shadow: 0 0 10px rgba(60,255,120,0.4); }
+body[data-design="bitcoin"] {
+  --card-bg: rgba(247,147,26,0.11); --card-brd: rgba(247,147,26,0.32); --card-bg-2: rgba(247,147,26,0.07);
+  --accent: #f7931a; --text: #f6efe3; --text-dim: rgba(246,239,227,0.74); --text-faint: rgba(246,239,227,0.52);
+  --sky-a: #4a3110; --sky-b: #241706; --sky-c: #0c0802; --sky-tint: transparent;
+  --hairline: rgba(247,147,26,0.18);
+}
+
 /* Light themes: dark text needs dark option text and softened particles */
 body[data-design="daylight"] .set-row select option,
 body[data-design="sand"] .set-row select option,
@@ -150,19 +165,17 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
   .pager { order: 3; display: block; overflow: visible; scroll-snap-type: none; }
   .page { display: none; width: 100%; height: auto; overflow: visible; padding: 14px 24px 40px; }
   .page.active-page { display: block; }
-  /* Heute → two-column masonry dashboard */
-  #page-today.active-page { column-count: 2; column-gap: 18px; }
-  #page-today > * { break-inside: avoid; margin-bottom: 0; }
-  #page-today > .card, #page-today > #airbio { margin-bottom: 18px; }
-  #page-today .hero.card, #page-today .foot { column-span: all; }
-  #page-today #airbio { display: block; }
-  #page-today #airbio .card:first-child { margin-bottom: 18px; }
+  /* Heute → clean CSS grid dashboard (no overlap) */
+  #page-today.active-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+  #page-today.active-page > * { margin-bottom: 0; min-width: 0; }
+  #page-today .hero.card, #page-today .foot { grid-column: 1 / -1; }
+  #page-today #airbio { display: grid; grid-template-columns: 1fr; gap: 18px; }
   /* Other tabs → comfortable single column */
   .page:not(#page-today).active-page { max-width: 760px; margin: 0 auto; }
   .radar-map { height: 420px; }
 }
-@media (min-width: 1200px) {
-  #page-today.active-page { column-count: 3; }
+@media (min-width: 1500px) {
+  #page-today.active-page { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 /* ---- Top bar ---- */
@@ -681,6 +694,33 @@ body { overscroll-behavior-y: contain; }
 .ptr.ready .ptr-spin { border-top-color: var(--accent); }
 .ptr.spin .ptr-spin { animation: spin .8s linear infinite; }
 .saved-empty { cursor: pointer; }
+
+/* ---- First-visit theme picker ---- */
+.theme-overlay { align-items: center; z-index: 55; }
+.theme-card { max-width: 470px; text-align: center; padding: 26px 22px; }
+.theme-card h2 { font-size: 20px; margin-bottom: 6px; }
+.theme-card p { color: var(--text-dim); font-size: 13.5px; margin-bottom: 18px; }
+.theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
+@media (min-width: 420px) { .theme-grid { grid-template-columns: repeat(4, 1fr); } }
+.tp-swatch { position: relative; height: 66px; border-radius: 12px; border: 2px solid transparent; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 6px; overflow: hidden; }
+.tp-swatch.sel { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+.tp-dot { position: absolute; top: 8px; left: 8px; width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 6px rgba(0,0,0,0.3); }
+.tp-name { font-size: 11px; font-weight: 700; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,0.65); }
+
+/* ---- Streak widget ---- */
+.streak-card { background: linear-gradient(150deg, rgba(255,150,60,0.22), rgba(255,90,60,0.13)); }
+.sk-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.sk-flame { font-size: 32px; display: flex; align-items: center; }
+.sk-count { font-size: 30px; font-weight: 800; margin-left: 4px; }
+.sk-txt { display: flex; flex-direction: column; }
+.sk-txt b { font-size: 15px; }
+.sk-best { font-size: 12.5px; color: var(--text-dim); }
+.sk-week { display: flex; justify-content: space-between; gap: 4px; margin-bottom: 12px; }
+.sk-day { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.sk-dot { width: 30px; height: 30px; border-radius: 50%; background: var(--card-bg-2); border: 1px solid var(--hairline); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.sk-dot.on { background: rgba(255,150,60,0.32); border-color: rgba(255,180,120,0.5); }
+.sk-wd { font-size: 10px; color: var(--text-faint); }
+.sk-motiv { font-size: 13.5px; color: var(--text-dim); line-height: 1.4; }
 
 /* ---- Extras: streak, calendar, layout manager ---- */
 [data-huser] { display: none !important; }

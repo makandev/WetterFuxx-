@@ -67,6 +67,7 @@
             <div id="heroHiLo" class="hero-hilo"></div>
           </div>
         </section>
+        <section id="streakCard" class="card streak-card" hidden></section>
         <section id="ask" class="card" hidden></section>
         <section id="moment" class="card moment" hidden></section>
         <section id="clothing" class="card clothing"></section>
@@ -207,6 +208,10 @@
             <option value="forest">Forest</option>
             <option value="mono">Mono</option>
           </optgroup>
+          <optgroup label="Spezial">
+            <option value="matrix">Matrix</option>
+            <option value="bitcoin">Bitcoin</option>
+          </optgroup>
           <optgroup label="Hell">
             <option value="daylight">Daylight</option>
             <option value="sand">Sand</option>
@@ -233,6 +238,16 @@
 
   <!-- Offline notice -->
   <div id="offlineBanner" class="offline-banner" role="status" hidden>📴 Offline – zeige zuletzt geladene Daten</div>
+
+  <!-- First-visit theme picker -->
+  <div id="themePicker" class="overlay theme-overlay">
+    <div class="overlay-card theme-card">
+      <h2 id="themeTitle">🎨 Wähle dein Design</h2>
+      <p id="themeSub">Tippe zum Vorschauen – du kannst es später jederzeit ändern.</p>
+      <div id="themeGrid" class="theme-grid"></div>
+      <button id="themeDone" class="btn btn-block">Los geht’s</button>
+    </div>
+  </div>
 
   <!-- Welcome / onboarding -->
   <div id="welcome" class="overlay welcome-overlay">
