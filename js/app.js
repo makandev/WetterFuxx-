@@ -19,6 +19,8 @@ let settings = loadSettings();
 let currentPlace = null;
 let currentData = null;
 let searchTimer = null;
+let searchAbort = null;
+let searchSeq = 0;
 
 async function boot() {
   setLang(settings.lang);
@@ -238,6 +240,7 @@ function openSearch() {
   $('#searchOverlay').classList.add('open');
   $('#searchInput').value = '';
   $('#searchResults').innerHTML = '';
+  if (searchAbort) { searchAbort.abort(); searchAbort = null; }
   setTimeout(() => $('#searchInput').focus(), 50);
 }
 function closeSearch() { $('#searchOverlay').classList.remove('open'); }
@@ -247,11 +250,20 @@ function onSearchInput(e) {
   clearTimeout(searchTimer);
   if (q.trim().length < 2) { $('#searchResults').innerHTML = ''; return; }
   searchTimer = setTimeout(async () => {
+    if (searchAbort) searchAbort.abort();
+    searchAbort = new AbortController();
+    const my = ++searchSeq;
+    const bias = currentPlace && Number.isFinite(currentPlace.lat)
+      ? { lat: currentPlace.lat, lon: currentPlace.lon } : null;
     try {
-      const results = await searchPlaces(q, getLang());
+      const results = await searchPlaces(q, getLang(), bias, searchAbort.signal);
+      if (my !== searchSeq) return; // a newer keystroke already superseded this one
       renderSearchResults(results);
-    } catch { $('#searchResults').innerHTML = `<div class="search-empty">${t('errSearch')}</div>`; }
-  }, 250);
+    } catch (err) {
+      if (err.name === 'AbortError' || my !== searchSeq) return;
+      $('#searchResults').innerHTML = `<div class="search-empty">${t('errSearch')}</div>`;
+    }
+  }, 200);
 }
 function renderSearchResults(results) {
   const box = $('#searchResults');
