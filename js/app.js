@@ -74,7 +74,7 @@ function wireTabs() {
       setActiveTab(Math.round(pager.scrollLeft / pager.clientWidth));
     });
   }, { passive: true });
-  window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; });
+  window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; scheduleMasonry(); });
 }
 function setActiveTab(i) {
   if (i < 0 || i > 3 || i === activeTab) return;
@@ -87,6 +87,38 @@ function setActiveTab(i) {
   // On desktop only the active page is shown; on mobile the class is harmless
   document.querySelectorAll('.page').forEach((p, idx) => p.classList.toggle('active-page', idx === i));
   if (i === 1) setTimeout(invalidateRadar, 250); // Verlauf → recompute map size
+  if (i === 0) scheduleMasonry();
+}
+
+// ---- Desktop masonry: pack Heute's cards tightly into columns (no gaps) ------
+const MASONRY_IDS = ['streakCard', 'ask', 'moment', 'clothing', 'nowcast', 'hourly',
+  'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon'];
+let masonryRAF = 0;
+function applyMasonry() {
+  const page = document.getElementById('page-today');
+  if (!page) return;
+  const footer = page.querySelector('.foot');
+  const items = MASONRY_IDS.map((id) => document.getElementById(id)).filter(Boolean);
+  let wrap = page.querySelector('.masonry');
+  const desktop = window.matchMedia('(min-width: 900px)').matches;
+  if (!desktop) { // mobile → single column, unwrap
+    if (wrap) { items.forEach((el) => page.insertBefore(el, footer)); wrap.remove(); }
+    return;
+  }
+  const cols = window.matchMedia('(min-width: 1500px)').matches ? 3 : 2;
+  if (!wrap) { wrap = document.createElement('div'); wrap.className = 'masonry'; page.insertBefore(wrap, footer); }
+  wrap.textContent = ''; // detaches mcols; item refs in `items` stay valid
+  const colEls = [];
+  for (let i = 0; i < cols; i++) { const c = document.createElement('div'); c.className = 'mcol'; wrap.appendChild(c); colEls.push(c); }
+  items.forEach((el) => {
+    let min = 0;
+    for (let i = 1; i < colEls.length; i++) if (colEls[i].offsetHeight < colEls[min].offsetHeight) min = i;
+    colEls[min].appendChild(el);
+  });
+}
+function scheduleMasonry() {
+  if (masonryRAF) cancelAnimationFrame(masonryRAF);
+  masonryRAF = requestAnimationFrame(() => { masonryRAF = 0; applyMasonry(); });
 }
 
 function applyStaticText() {
@@ -143,6 +175,7 @@ async function selectPlace(place, updateHistory = true) {
     updateThemeColor();
     hideLoading();
     refreshFamily();
+    scheduleMasonry();
   } catch (e) {
     console.error(e);
     if (my !== selReqId) return;
@@ -350,7 +383,7 @@ function onSettingChange(e) {
   else if (key === 'theme') { settings.theme = val; applyTheme(val); }
   saveSettings(settings);
   if (key === 'temp' || key === 'wind') refresh();
-  else if ((key === 'lang' || key === 'cold' || key === 'profile') && currentData) renderAll(currentData, settings);
+  else if ((key === 'lang' || key === 'cold' || key === 'profile') && currentData) { renderAll(currentData, settings); scheduleMasonry(); }
 }
 
 function applyTheme(design) {
