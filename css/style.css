@@ -405,6 +405,42 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .bio-label i { font-style: normal; color: var(--text-faint); font-size: 12px; }
 .bio-val { font-weight: 600; font-size: 14px; }
 
+/* Expandable bio factors */
+.bio-sub { font-size: 12.5px; color: var(--text-dim); margin: 0 2px 8px; line-height: 1.4; }
+.bio-item { border-top: 1px solid var(--hairline); }
+.bio-item:first-of-type { border-top: none; }
+.bio-sum { display: flex; align-items: center; gap: 10px; padding: 10px 2px; cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent; }
+.bio-sum::-webkit-details-marker { display: none; }
+.bio-item.bare .bio-sum { cursor: default; }
+.bio-chev { font-size: 15px; color: var(--text-faint); transition: transform .2s ease; }
+.bio-item[open] .bio-chev { transform: rotate(180deg); }
+.bio-detail { padding: 2px 2px 12px 32px; font-size: 13px; line-height: 1.5; animation: rise .22s ease both; }
+.bio-detail p { margin: 4px 0 0; }
+.bio-hint { color: var(--text-dim); }
+.bio-tip { color: var(--text); opacity: .92; }
+.bio-quiet { padding: 12px 2px; color: var(--text-dim); font-size: 13.5px; }
+.bio-journal { font-size: 12.5px; color: var(--text-dim); margin: 10px 2px 0; }
+.bio-disc { font-size: 11px; color: var(--text-faint); margin-top: 12px; line-height: 1.45; }
+
+/* Sunset sky-show */
+.sky-show { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--hairline); }
+.sky-head { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.sky-emoji { font-size: 18px; }
+.sky-score { margin-left: auto; font-weight: 700; font-size: 15px; }
+.sky-score i { font-style: normal; font-weight: 400; font-size: 11px; color: var(--text-faint); }
+.sky-note { font-size: 13px; color: var(--text-dim); margin: 6px 0 0; }
+.sky-times { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 10px 0; font-size: 13px; color: var(--text-dim); }
+.sky-item { border-top: 1px solid var(--hairline); }
+.sky-sum { display: flex; align-items: center; gap: 8px; padding: 9px 2px; cursor: pointer; list-style: none; }
+.sky-sum::-webkit-details-marker { display: none; }
+.sky-txt { flex: 1; font-size: 14px; }
+.sky-txt i { font-style: normal; color: var(--text-faint); font-size: 12px; }
+.sky-item.maybe .sky-txt { color: var(--text-dim); }
+.sky-chev { font-size: 14px; color: var(--text-faint); transition: transform .2s ease; }
+.sky-item[open] .sky-chev { transform: rotate(180deg); }
+.sky-detail { padding: 0 2px 10px 30px; font-size: 12.5px; color: var(--text-dim); line-height: 1.5; margin: 0; animation: rise .22s ease both; }
+.sky-hint { font-size: 12px; color: var(--text-faint); margin: 10px 2px 0; line-height: 1.45; }
+
 /* ---- Symptom journal ---- */
 .jr-risk { font-size: 13.5px; line-height: 1.5; margin-bottom: 10px; }
 .jr-insight { font-size: 13px; color: var(--text-dim); background: var(--card-bg-2); border-radius: 10px; padding: 9px 11px; margin-bottom: 12px; }

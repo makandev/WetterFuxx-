@@ -72,6 +72,23 @@ export function formatWhen(iso) {
   const day = d.toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'numeric' });
   return `${day} ${time}`;
 }
+// Shift a naive Open-Meteo wall-clock string by dMin minutes and return it
+// still as a naive wall-clock string (no "Z"), ready for formatTime(). Keeping
+// everything in the parseLocal space avoids the viewer-offset double-shift.
+export function shiftWall(iso, dMin) {
+  const base = parseLocal(iso);
+  if (!base) return null;
+  return new Date(base.getTime() + dMin * 60000).toISOString().slice(0, 16);
+}
+// Golden/blue-hour durations scale with latitude: near the poles the sun sets
+// at a shallow angle so the light lingers much longer than the mid-latitude
+// "40 min" rule of thumb. cos(lat) captures most of that dependence.
+export function goldenBlueMinutes(latDeg) {
+  const c = Math.max(0.33, Math.cos((latDeg || 0) * Math.PI / 180));
+  const golden = Math.min(75, Math.max(22, Math.round(28 / c)));
+  const blue = Math.min(45, Math.max(15, Math.round(golden * 0.6)));
+  return { golden, blue };
+}
 export function dayLabel(iso, i) {
   const d = new Date(iso);
   if (i === 0) return t('today');
