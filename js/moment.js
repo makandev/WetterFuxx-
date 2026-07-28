@@ -46,8 +46,11 @@ export function buildMoment(data, settings) {
   // Golden hour photo tip on clear-ish evenings
   const ss = parseLocal(d.sunset ? d.sunset[0] : null);
   if (ss && (CLEARISH.includes(code) || CLEARISH.includes(codeToday))) {
-    const golden = new Date(ss.getTime() - 40 * 60000);
-    return M('📸', L('Goldene Stunde', 'Golden hour'), L(`Bestes Fotolicht ab etwa ${formatTime(golden.toISOString())} bis Sonnenuntergang ${formatTime(d.sunset[0])}.`, `Best photo light from about ${formatTime(golden.toISOString())} to sunset ${formatTime(d.sunset[0])}.`));
+    // Keep the golden-hour time in the same naive wall-clock space as sunset:
+    // parseLocal reads the string as UTC, so slice the Z off before formatting,
+    // otherwise formatTime would shift it by the viewer's timezone offset.
+    const golden = new Date(ss.getTime() - 40 * 60000).toISOString().slice(0, 16);
+    return M('📸', L('Goldene Stunde', 'Golden hour'), L(`Bestes Fotolicht ab etwa ${formatTime(golden)} bis Sonnenuntergang ${formatTime(d.sunset[0])}.`, `Best photo light from about ${formatTime(golden)} to sunset ${formatTime(d.sunset[0])}.`));
   }
   if (uv >= 8)
     return M('🔆', L('Starke Sonne', 'Strong sun'), L('Sehr hohe UV-Belastung – guten Sonnenschutz nicht vergessen.', 'Very high UV – don’t forget good sun protection.'));
