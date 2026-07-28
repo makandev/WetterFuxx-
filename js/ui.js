@@ -1067,7 +1067,8 @@ function renderDaily(data, s) {
     </div>`;
   }).join('');
 
-  $('#daily').innerHTML = `<div class="card-title has-share">${t('daily')}${shareBtn('daily')}</div><div class="days">${rows}</div>`;
+  const wkLabel = getLang() === 'en' ? 'Weekend' : 'Wochenende';
+  $('#daily').innerHTML = `<div class="card-title has-share">${t('daily')}<span class="title-actions"><button class="card-share card-share--text" data-share="weekend" title="${wkLabel}">${wkLabel} ↗</button>${shareBtn('daily')}</span></div><div class="days">${rows}</div>`;
 
   // Tap a day to expand its hourly detail (built lazily)
   $('#daily').querySelectorAll('.day-row').forEach((btn) => {
