@@ -239,14 +239,41 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 /* ---- Alerts ---- */
 .alerts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
 .alert {
-  display: flex; align-items: center; gap: 10px;
   background: linear-gradient(90deg, rgba(255,170,60,0.28), rgba(255,120,80,0.2));
   border: 1px solid rgba(255,190,120,0.4);
-  border-radius: var(--radius-sm); padding: 12px 14px; font-size: 14px; font-weight: 500;
+  border-radius: var(--radius-sm); font-size: 14px; font-weight: 500;
   box-shadow: var(--shadow);
   animation: rise .4s ease both;
+  overflow: hidden;
 }
+/* Non-expandable rows (locally derived advisories) keep the simple flex layout */
+.alert:not(details) { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
 .alert-ic { font-size: 20px; }
+
+/* Expandable official warnings */
+details.alert { padding: 0; }
+.alert-sum {
+  display: flex; align-items: center; gap: 10px; padding: 12px 14px;
+  cursor: pointer; list-style: none; -webkit-tap-highlight-color: transparent;
+}
+.alert-sum::-webkit-details-marker { display: none; }
+details.alert.bare .alert-sum { cursor: default; }
+.alert-chev { margin-left: auto; font-size: 18px; transition: transform .22s ease; opacity: .8; }
+details.alert[open] .alert-chev { transform: rotate(180deg); }
+.alert-head { display: flex; align-items: center; gap: 0; }
+.alert-tag {
+  display: inline-block; margin: 0 6px; padding: 1px 7px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  background: rgba(0,0,0,0.28); vertical-align: middle;
+}
+details.alert.upcoming { opacity: .9; }
+details.alert.upcoming .alert-ic { filter: grayscale(.25); }
+.alert-detail {
+  padding: 2px 14px 13px 44px; font-weight: 400; font-size: 13.5px; line-height: 1.5;
+  color: var(--text); animation: rise .25s ease both;
+}
+.alert-detail p { margin: 6px 0 0; }
+.alert-instr { color: var(--text); opacity: .95; }
 
 /* ---- Hero ---- */
 .hero { display: flex; align-items: center; gap: 8px; padding: 22px 20px; }
