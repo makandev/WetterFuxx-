@@ -12,7 +12,7 @@ import {
 } from './store.js';
 import { SYMPTOMS, symptomLabel, symptomEmoji, buildInsights, extraInsights, personalRisk } from './journal.js';
 import {
-  tempStr, num, windDir, windUnitLabel, formatHour, formatTime, dayLabel,
+  tempStr, num, windDir, windUnitLabel, formatHour, formatTime, formatWhen, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
   setPlaceTz, parseLocal, placeNowMs, shortDate, isWeekend,
 } from './format.js';
@@ -566,15 +566,30 @@ function renderAlerts(data, s) {
   const box = $('#alerts');
   const official = data.officialAlerts || [];
   if (official.length) {
+    const en = getLang() === 'en';
     box.hidden = false;
     box.innerHTML = official.slice(0, 4).map((a) => {
       const sev = sevInfo(a.severity);
-      const head = getLang() === 'en' ? (a.headlineEn || a.eventEn) : (a.headline || a.event);
-      const until = a.expires ? ` · ${t('until')} ${formatTime(a.expires)}` : '';
-      return `<div class="alert sev-${sev.key}">
-        <span class="alert-ic">${sev.icon}</span>
-        <span class="alert-body"><b>${sev.label}</b> ${escapeHtml(head)}<small>${until}</small></span>
-      </div>`;
+      const head = en ? (a.headlineEn || a.eventEn) : (a.headline || a.event);
+      const win = alertWindow(a, en);
+      const desc = en ? (a.descriptionEn || a.description) : (a.description || a.descriptionEn);
+      const instr = en ? (a.instructionEn || a.instruction) : (a.instruction || a.instructionEn);
+      const hasDetails = !!(desc || instr);
+      const upcoming = a.active === false;
+      const badge = upcoming ? `<span class="alert-tag">${en ? 'upcoming' : 'bevorstehend'}</span>` : '';
+      const chev = hasDetails ? '<span class="alert-chev" aria-hidden="true">⌄</span>' : '';
+      const detail = hasDetails ? `<div class="alert-detail">
+          ${desc ? `<p>${escapeHtml(desc)}</p>` : ''}
+          ${instr ? `<p class="alert-instr"><b>${en ? 'What to do' : 'Verhalten'}:</b> ${escapeHtml(instr)}</p>` : ''}
+        </div>` : '';
+      return `<details class="alert sev-${sev.key}${upcoming ? ' upcoming' : ''}${hasDetails ? '' : ' bare'}">
+        <summary class="alert-sum">
+          <span class="alert-ic">${sev.icon}</span>
+          <span class="alert-body"><span class="alert-head"><b>${sev.label}</b>${badge}</span>${escapeHtml(head)}<small>${escapeHtml(win)}</small></span>
+          ${chev}
+        </summary>
+        ${detail}
+      </details>`;
     }).join('');
     return;
   }
@@ -597,6 +612,14 @@ function renderAlerts(data, s) {
   box.hidden = false;
   box.innerHTML = alerts.map((a) =>
     `<div class="alert"><span class="alert-ic">${a.icon}</span><span>${a.txt}</span></div>`).join('');
+}
+// Human validity line: upcoming → "ab 14:00", active → "bis 20:00" / "bis Do 18:00".
+function alertWindow(a, en) {
+  const from = a.onset ? formatWhen(a.onset) : '';
+  const to = a.expires ? formatWhen(a.expires) : '';
+  if (a.active === false && from) return (en ? 'from ' : 'ab ') + from + (to ? (en ? ` · until ${to}` : ` · bis ${to}`) : '');
+  if (to) return (en ? 'until ' : 'bis ') + to;
+  return '';
 }
 function sevInfo(sev) {
   switch (sev) {
