@@ -140,4 +140,4 @@ scripts/make_icons.py    Generator für die Icons
 
 ---
 
-_Wetterdaten: [Open-Meteo](https://open-meteo.com/) · Mit ❤️ gebaut für die ganze Familie._
+_Wetterdaten: [Open-Meteo](https://open-meteo.com/) · Mit ❤️ gebaut _
