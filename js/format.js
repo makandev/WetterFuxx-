@@ -62,6 +62,16 @@ export function formatTime(iso) {
   const d = new Date(iso);
   return d.toLocaleTimeString(getLang() === 'en' ? 'en-GB' : 'de-DE', { hour: '2-digit', minute: '2-digit' });
 }
+// Time if it's today, otherwise "Mo 12.8. 14:00" — used for warning validity windows.
+export function formatWhen(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const loc = getLang() === 'en' ? 'en-GB' : 'de-DE';
+  const time = d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' });
+  if (d.toDateString() === new Date().toDateString()) return time;
+  const day = d.toLocaleDateString(loc, { weekday: 'short', day: 'numeric', month: 'numeric' });
+  return `${day} ${time}`;
+}
 export function dayLabel(iso, i) {
   const d = new Date(iso);
   if (i === 0) return t('today');
