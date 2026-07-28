@@ -1,7 +1,7 @@
 // moment.js — "Wetter-Moment des Tages": one curated, shareable daily hook
 
 import { getLang } from './i18n.js';
-import { parseLocal, formatTime } from './format.js';
+import { parseLocal, formatTime, shiftWall, goldenBlueMinutes } from './format.js';
 
 function L(de, en) { return getLang() === 'en' ? en : de; }
 function toC(v, unit) { return unit === 'F' ? (v - 32) * 5 / 9 : v; }
@@ -46,8 +46,11 @@ export function buildMoment(data, settings) {
   // Golden hour photo tip on clear-ish evenings
   const ss = parseLocal(d.sunset ? d.sunset[0] : null);
   if (ss && (CLEARISH.includes(code) || CLEARISH.includes(codeToday))) {
-    const golden = new Date(ss.getTime() - 40 * 60000);
-    return M('📸', L('Goldene Stunde', 'Golden hour'), L(`Bestes Fotolicht ab etwa ${formatTime(golden.toISOString())} bis Sonnenuntergang ${formatTime(d.sunset[0])}.`, `Best photo light from about ${formatTime(golden.toISOString())} to sunset ${formatTime(d.sunset[0])}.`));
+    // Latitude-aware golden window, kept in the naive wall-clock space so the
+    // time never gets double-shifted by the viewer's timezone offset.
+    const { golden: gMin } = goldenBlueMinutes(data.place && data.place.lat);
+    const golden = shiftWall(d.sunset[0], -gMin);
+    return M('📸', L('Goldene Stunde', 'Golden hour'), L(`Bestes Fotolicht ab etwa ${formatTime(golden)} bis Sonnenuntergang ${formatTime(d.sunset[0])}.`, `Best photo light from about ${formatTime(golden)} to sunset ${formatTime(d.sunset[0])}.`));
   }
   if (uv >= 8)
     return M('🔆', L('Starke Sonne', 'Strong sun'), L('Sehr hohe UV-Belastung – guten Sonnenschutz nicht vergessen.', 'Very high UV – don’t forget good sun protection.'));
