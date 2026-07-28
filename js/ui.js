@@ -14,8 +14,9 @@ import { SYMPTOMS, symptomLabel, symptomEmoji, buildInsights, extraInsights, per
 import {
   tempStr, num, windDir, windUnitLabel, formatHour, formatTime, formatWhen, dayLabel,
   uvLevel, aqiLevel, pollenLevel, moonPhase, daylightStr, placeLabel, placeSub,
-  setPlaceTz, parseLocal, placeNowMs, shortDate, isWeekend,
+  setPlaceTz, parseLocal, placeNowMs, shortDate, isWeekend, tempUnitLabel,
 } from './format.js';
+import { sunsetOutlook } from './skyshow.js';
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -374,45 +375,156 @@ function photoScore(x) {
 }
 
 // ---- Bio-weather & health ----------------------------------------------------
+const BIO = { NONE: 0, LOW: 1, MOD: 2, HIGH: 3 };
+const bioCls = (l) => (l >= 3 ? 'lvl-poor' : l >= 2 ? 'lvl-moderate' : l >= 1 ? 'lvl-good' : 'lvl-none');
+const bioLbl = (l) => (l >= 3 ? t('highLvl') : l >= 2 ? t('moderateLvl') : t('lowLvl'));
+
 function renderBiowetter(data, s) {
   const box = $('#biowetter');
   const c = data.forecast.current;
   const h = data.forecast.hourly;
+  const d = data.forecast.daily;
+  const air = data.air;
   const idx = currentHourIndex(h);
+  const en = getLang() === 'en';
+  const { LOW, MOD, HIGH } = BIO;
 
-  // pressure trend over the previous ~3h
-  let trend = t('trendSteady'), trendIcon = '→', delta = 0;
-  if (h.pressure_msl && idx >= 3) {
-    delta = h.pressure_msl[idx] - h.pressure_msl[idx - 3];
-    if (delta > 1.5) { trend = t('trendRising'); trendIcon = '↗'; }
-    else if (delta < -1.5) { trend = t('trendFalling'); trendIcon = '↘'; }
-  }
-  const migraine = Math.abs(delta) >= 4 ? 'lvl-poor' : Math.abs(delta) >= 2.5 ? 'lvl-moderate' : 'lvl-good';
-  const migraineLbl = Math.abs(delta) >= 4 ? t('highLvl') : Math.abs(delta) >= 2.5 ? t('moderateLvl') : t('lowLvl');
-
-  const dew = h.dew_point_2m ? toC(h.dew_point_2m[idx], s.units.temp) : null;
-  const muggy = dew == null ? null : dew >= 18 ? t('highLvl') : dew >= 15 ? t('moderateLvl') : t('lowLvl');
-  const muggyCls = dew == null ? 'lvl-none' : dew >= 18 ? 'lvl-poor' : dew >= 15 ? 'lvl-moderate' : 'lvl-good';
-
-  const feelsC = toC(c.apparent_temperature, s.units.temp);
+  // thresholds always compared in °C (API values follow the chosen unit)
+  const C = (v) => (v == null ? null : toC(v, s.units.temp));
+  const feelsC = C(c.apparent_temperature);
+  const tmaxC = C(d.temperature_2m_max ? d.temperature_2m_max[0] : null);
+  const tminC = C(d.temperature_2m_min ? d.temperature_2m_min[0] : null);
+  const dewC = h.dew_point_2m ? C(h.dew_point_2m[idx]) : null;
+  const rh = c.relative_humidity_2m;
   const windKmh = toKmhU(c.wind_speed_10m, s.units.wind);
-  const cold = (feelsC >= 1 && feelsC <= 10 && windKmh >= 15 && c.relative_humidity_2m >= 75);
-  const circ = feelsC >= 30 ? t('highLvl') : feelsC >= 27 ? t('moderateLvl') : (feelsC <= -5 ? t('moderateLvl') : t('lowLvl'));
-  const circCls = feelsC >= 30 ? 'lvl-poor' : feelsC >= 27 ? 'lvl-moderate' : (feelsC <= -5 ? 'lvl-moderate' : 'lvl-good');
+  const gustKmh = toKmhU(c.wind_gusts_10m, s.units.wind);
+  const cloud = c.cloud_cover != null ? c.cloud_cover : 100;
+  const swing = (tmaxC != null && tminC != null) ? (tmaxC - tminC) : null;
+  const d3 = (h.pressure_msl && idx >= 3) ? h.pressure_msl[idx] - h.pressure_msl[idx - 3] : null;
+  const d12 = (h.pressure_msl && idx >= 12) ? h.pressure_msl[idx] - h.pressure_msl[idx - 12] : null;
 
-  const rows = [
-    bioRow('🌡️', t('pressureTrend'), `${trendIcon} ${trend}`, `${num(delta, 1)} hPa/3h`, ''),
-    bioRow('🤕', t('migraine'), `<span class="badge ${migraine}">${migraineLbl}</span>`, '', ''),
-    bioRow('❤️', t('circulation'), `<span class="badge ${circCls}">${circ}</span>`, '', ''),
-  ];
-  if (muggy) rows.push(bioRow('💦', t('muggy'), `<span class="badge ${muggyCls}">${muggy}</span>`, '', ''));
-  if (cold) rows.push(bioRow('🤧', t('coldRisk'), `<span class="badge lvl-moderate">${t('moderateLvl')}</span>`, '', ''));
+  const factors = [];
+  const F = (o) => factors.push(o);
+
+  // 1 pressure tendency — always shown as context, no badge/detail
+  let trend = t('trendSteady'), tIcon = '→';
+  if (d3 != null) { if (d3 > 1.5) { trend = t('trendRising'); tIcon = '↗'; } else if (d3 < -1.5) { trend = t('trendFalling'); tIcon = '↘'; } }
+  F({ key: 'pressure', show: true, level: 0, icon: '🌡️', label: t('pressureTrend'), valueHtml: `${tIcon} ${trend}`, sub: d3 != null ? `${num(d3, 1)} hPa/3h` : '' });
+
+  // 2 headache / migraine stimulus
+  {
+    const a3 = d3 != null ? Math.abs(d3) : 0, a12 = d12 != null ? Math.abs(d12) : 0;
+    let lvl = LOW;
+    if (a3 >= 3.5 || a12 >= 7 || (d12 != null && d12 <= -6)) lvl = HIGH;
+    else if (a3 >= 2 || a12 >= 4) lvl = MOD;
+    F({ key: 'migraine', show: d3 != null, level: lvl, icon: '🤕', label: t('migraine'), badge: lvl, hint: t('bioMig_hint'), tip: t('bioMig_tip') });
+  }
+  // 3 circulation
+  if (feelsC != null) {
+    let lvl = LOW;
+    if (feelsC >= 32) lvl = HIGH; else if (feelsC >= 28 || feelsC <= -8 || (swing != null && swing >= 13)) lvl = MOD;
+    F({ key: 'circulation', show: true, level: lvl, icon: '❤️', label: t('circulation'), badge: lvl, hint: t('bioCirc_hint'), tip: t('bioCirc_tip') });
+  }
+  // 4 mugginess
+  if (dewC != null && dewC >= 13) {
+    const lvl = dewC >= 18 ? HIGH : dewC >= 15 ? MOD : LOW;
+    F({ key: 'muggy', show: true, level: lvl, icon: '💦', label: t('muggy'), sub: `${t('dewPoint')} ${tempStr(h.dew_point_2m[idx])}`, badge: lvl, hint: t('bioMug_hint'), tip: t('bioMug_tip') });
+  }
+  // 5 cold stimulus (conditional)
+  if (feelsC != null && feelsC >= 1 && feelsC <= 10 && windKmh >= 15 && rh >= 75) {
+    const lvl = (feelsC <= 2 && windKmh >= 30) ? HIGH : MOD;
+    F({ key: 'cold', show: true, level: lvl, icon: '🤧', label: t('coldRisk'), badge: lvl, hint: t('bioCold_hint'), tip: t('bioCold_tip') });
+  }
+  // 6 day–night temperature swing (conditional)
+  if (swing != null && swing >= 10) {
+    F({ key: 'swing', show: true, level: swing >= 14 ? HIGH : MOD, icon: '📈', label: t('bioSwingLbl'), sub: `${Math.round(swing)}°`, badge: swing >= 14 ? HIGH : MOD, hint: t('bioSwing_hint'), tip: t('bioSwing_tip') });
+  }
+  // 7 wind / foehn (conditional)
+  if (gustKmh >= 40) {
+    const lvl = gustKmh >= 60 ? HIGH : MOD;
+    const foehn = (rh < 40 && feelsC != null && feelsC >= 18 && windKmh >= 25 && cloud < 40);
+    F({ key: 'wind', show: true, level: lvl, icon: '💨', label: foehn ? t('bioFoehnLbl') : t('bioWindLbl'), sub: `${Math.round(gustKmh)} ${windUnitLabel(s.units.wind)}`, badge: lvl, hint: t('bioWind_hint'), tip: t('bioWind_tip') });
+  }
+  // 8 UV
+  {
+    const uvv = h.uv_index && h.uv_index[idx] != null ? h.uv_index[idx] : (d.uv_index_max ? (d.uv_index_max[0] || 0) : 0);
+    if (uvv >= 3) {
+      const ul = uvLevel(uvv);
+      F({ key: 'uv', show: true, level: uvv >= 8 ? HIGH : uvv >= 6 ? MOD : LOW, icon: '🔆', label: t('uv'), sub: `${num(uvv)}`, valueHtml: `<span class="badge ${ul.cls}">${ul.label}</span>`, hint: t('bioUv_hint'), tip: ul.advice });
+    }
+  }
+  // 9 air quality for sensitive groups (conditional)
+  if (air && air.current && air.current.european_aqi != null && air.current.european_aqi > 40) {
+    const al = aqiLevel(air.current.european_aqi);
+    if (al) F({ key: 'air', show: true, level: air.current.european_aqi > 80 ? HIGH : MOD, icon: '🍃', label: t('airQuality'), sub: `AQI ${Math.round(air.current.european_aqi)}`, valueHtml: `<span class="badge ${al.cls}">${al.label}</span>`, hint: t('bioAir_hint'), tip: t('bioAir_tip') });
+  }
+  // 10 pollen / allergy (conditional)
+  if (air && air.hourly) {
+    const ph = air.hourly;
+    const arts = [['grass', ph.grass_pollen], ['birch', ph.birch_pollen], ['alder', ph.alder_pollen], ['ragweed', ph.ragweed_pollen], ['mugwort', ph.mugwort_pollen], ['olive', ph.olive_pollen]];
+    let best = null;
+    for (const [key, arr] of arts) {
+      if (!arr) continue; const v = firstNum(arr); if (v == null) continue;
+      const pl = pollenLevel(v); const rank = pl.cls === 'lvl-poor' ? 3 : pl.cls === 'lvl-moderate' ? 2 : pl.cls === 'lvl-good' ? 1 : 0;
+      if (!best || rank > best.rank) best = { key, pl, rank };
+    }
+    if (best && best.rank >= 2) F({ key: 'pollen', show: true, level: best.rank >= 3 ? HIGH : MOD, icon: '🌸', label: t('pollen'), sub: t(best.key), valueHtml: `<span class="badge ${best.pl.cls}">${best.pl.label}</span>`, hint: t('bioPollen_hint'), tip: t('bioPollen_tip') });
+  }
+  // 11 joints / rheumatism (conditional)
+  if (rh != null && feelsC != null) {
+    let lvl = 0;
+    if (rh >= 85 && feelsC <= 10 && ((d3 != null && d3 <= -2) || (d12 != null && d12 <= -5))) lvl = HIGH;
+    else if (rh >= 80 && feelsC <= 14 && ((d3 != null && d3 <= -1) || (d12 != null && d12 <= -3))) lvl = MOD;
+    if (lvl >= MOD) F({ key: 'joints', show: true, level: lvl, icon: '🦴', label: t('bioJointLbl'), badge: lvl, hint: t('bioJoint_hint'), tip: t('bioJoint_tip') });
+  }
+  // 12 airways / asthma (conditional)
+  {
+    const a = (air && air.current) ? air.current : {};
+    let lvl = 0;
+    if ((a.ozone >= 180) || (a.pm2_5 >= 50) || (a.pm10 >= 100) || (feelsC != null && feelsC <= -5 && rh < 45)) lvl = HIGH;
+    else if ((a.ozone >= 120) || (a.pm2_5 >= 25) || (a.pm10 >= 50) || (feelsC != null && feelsC <= 0 && rh < 50)) lvl = MOD;
+    if (lvl >= MOD) F({ key: 'lungs', show: true, level: lvl, icon: '🫁', label: t('bioLungLbl'), badge: lvl, hint: t('bioLung_hint'), tip: t('bioLung_tip') });
+  }
+  // 13 sleep / tropical night (conditional)
+  if (tminC != null && tminC >= 18) {
+    F({ key: 'sleep', show: true, level: tminC >= 20 ? HIGH : MOD, icon: '🌙', label: t('bioSleepLbl'), sub: `${en ? 'low' : 'Tief'} ${tempStr(d.temperature_2m_min[0])}`, badge: tminC >= 20 ? HIGH : MOD, hint: t('bioSleep_hint'), tip: t('bioSleep_tip') });
+  }
+
+  const items = factors.filter((f) => f.show).sort((a, b) => b.level - a.level);
+  const active = items.filter((f) => f.level >= MOD && f.key !== 'pressure');
+  const hasJournal = loadJournal().length > 0;
+  const render = (f) => bioItem({
+    icon: f.icon, label: f.label, sub: f.sub,
+    badgeCls: f.badge != null ? bioCls(f.badge) : '', badgeLbl: f.badge != null ? bioLbl(f.badge) : '',
+    valueHtml: f.valueHtml, hint: f.hint, tip: f.tip,
+  });
 
   box.hidden = false;
-  box.innerHTML = `<div class="card-title">🧪 ${t('biowetter')}</div><div class="bio">${rows.join('')}</div>`;
+  box.innerHTML = `<div class="card-title">🧪 ${t('biowetter')}</div>
+    <p class="bio-sub">${t('bioSub')}</p>
+    <div class="bio">${active.length
+      ? items.map(render).join('')
+      : render(factors[0]) + `<div class="bio-quiet">🍃 ${t('bioQuiet')}</div>`}</div>
+    ${active.length && hasJournal ? `<p class="bio-journal">📓 ${t('bioJournalPrompt')}</p>` : ''}
+    <p class="bio-disc">🔒 ${t('bioDisclaimer')}</p>`;
 }
-function bioRow(icon, label, value, sub) {
-  return `<div class="bio-row"><span class="bio-ic">${icon}</span><span class="bio-label">${label}${sub ? ` <i>${sub}</i>` : ''}</span><span class="bio-val">${value}</span></div>`;
+
+// One bio factor as an expandable row: summary = icon/label/value, detail = hint + tip.
+function bioItem({ icon, label, sub, badgeCls, badgeLbl, valueHtml, hint, tip }) {
+  const val = valueHtml || (badgeLbl ? `<span class="badge ${badgeCls}">${badgeLbl}</span>` : '');
+  const hasDetail = !!(hint || tip);
+  const detail = hasDetail ? `<div class="bio-detail">
+      ${hint ? `<p class="bio-hint">${hint}</p>` : ''}
+      ${tip ? `<p class="bio-tip"><b>${t('bioTipLbl')}:</b> ${tip}</p>` : ''}
+    </div>` : '';
+  return `<details class="bio-item${hasDetail ? '' : ' bare'}">
+    <summary class="bio-sum">
+      <span class="bio-ic">${icon}</span>
+      <span class="bio-label">${label}${sub ? ` <i>${sub}</i>` : ''}</span>
+      <span class="bio-val">${val}</span>
+      ${hasDetail ? '<span class="bio-chev" aria-hidden="true">⌄</span>' : ''}
+    </summary>${detail}
+  </details>`;
 }
 
 // ---- Symptom journal (personal bio-weather) ---------------------------------
@@ -1006,6 +1118,8 @@ function renderSunMoon(data) {
   const now = placeNowMs();
   const srT = srD.getTime(), ssT = ssD.getTime();
   const prog = Math.max(0, Math.min(1, (now - srT) / (ssT - srT)));
+  const sky = sunsetOutlook(data, moon.illum);
+  const gMin = sky ? sky.golden.min : 40;
 
   // sun arc
   const arcW = 260, arcH = 90;
@@ -1031,8 +1145,36 @@ function renderSunMoon(data) {
       <div><b>${moon.name}</b><span class="lbl">${t('moonPhase')} · ${moon.illum}%</span></div>
       <div class="daylen"><span class="lbl">${t('dayLength')}</span><b>${daylightStr(d.daylight_duration[0])}</b></div>
     </div>
-    <button class="ics-btn" data-start="${floatStamp(new Date(ssT - 40 * 60000))}" data-end="${floatStamp(new Date(ssT))}"
+    ${renderSkyShow(sky)}
+    <button class="ics-btn" data-start="${floatStamp(new Date(ssT - gMin * 60000))}" data-end="${floatStamp(new Date(ssT))}"
       data-title="${getLang() === 'en' ? 'Golden hour 📸' : 'Goldene Stunde 📸'}">📅 ${getLang() === 'en' ? 'Golden hour to calendar' : 'Goldene Stunde in Kalender'}</button>`;
+}
+
+// Sunset sky forecast block: outlook badge, golden/blue hour, rare phenomena.
+function renderSkyShow(sky) {
+  if (!sky) return '';
+  const en = getLang() === 'en';
+  const o = sky.outlook;
+  if (o.key === 'hidden' || o.key === 'unknown') {
+    return `<div class="sky-show"><div class="sky-head"><span class="sky-emoji">${o.emoji}</span><b>${o.label}</b></div>${o.note ? `<p class="sky-note">${o.note}</p>` : ''}</div>`;
+  }
+  const scoreBadge = o.score != null ? `<span class="sky-score">${o.score}<i>/100</i></span>` : '';
+  const times = `<div class="sky-times">
+      <span>📸 ${en ? 'Golden' : 'Gold'} ${formatTime(sky.golden.start)}–${formatTime(sky.golden.end)}</span>
+      <span>🔵 ${en ? 'Blue' : 'Blau'} ${formatTime(sky.blue.start)}–${formatTime(sky.blue.end)}</span>
+    </div>`;
+  const phen = sky.phenomena.map((p) => `
+    <details class="sky-item${p.solid ? '' : ' maybe'}">
+      <summary class="sky-sum"><span class="sky-emoji">${p.emoji}</span>
+        <span class="sky-txt">${escapeHtml(p.text)}${p.solid ? '' : ` <i>${en ? 'possible' : 'möglich'}</i>`}</span>
+        <span class="sky-chev" aria-hidden="true">⌄</span></summary>
+      <p class="sky-detail">${escapeHtml(p.hint)}</p>
+    </details>`).join('');
+  return `<div class="sky-show">
+    <div class="sky-head"><span class="sky-emoji">${o.emoji}</span><b>${o.label}</b>${scoreBadge}</div>
+    ${times}${phen}
+    <p class="sky-hint">💡 ${escapeHtml(sky.hint)}</p>
+  </div>`;
 }
 function floatStamp(d) {
   const p = (n) => String(n).padStart(2, '0');
