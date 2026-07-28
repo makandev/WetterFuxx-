@@ -183,21 +183,41 @@ export async function getWeather(place, units = {}) {
   return { place, forecast, air, fetchedAt: Date.now() };
 }
 
-// Official DWD severe-weather warnings via Bright Sky (best-effort, DE/AT coverage)
+// Official DWD severe-weather warnings via Bright Sky (best-effort, DE/AT coverage).
+// Bright Sky returns warnings whose validity overlaps roughly "now", but that
+// includes ones that only start later today/tomorrow — and occasionally ones
+// that have just expired. We therefore drop expired warnings, flag each one as
+// currently active or still upcoming, and sort the most relevant first, so a
+// heat warning that only begins this afternoon isn't shown as if it's live now.
 export async function getAlerts(lat, lon) {
   try {
     const data = await getJSON(ALERTS, { lat, lon });
-    return (data.alerts || []).map((a) => ({
-      event: a.event_de || a.event_en || a.event || '',
-      eventEn: a.event_en || a.event_de || '',
-      headline: a.headline_de || a.headline_en || '',
-      headlineEn: a.headline_en || a.headline_de || '',
-      description: a.description_de || a.description_en || '',
-      descriptionEn: a.description_en || a.description_de || '',
-      instruction: a.instruction_de || a.instruction_en || '',
-      severity: (a.severity || 'minor').toLowerCase(),
-      onset: a.onset, expires: a.expires,
-    }));
+    const now = Date.now();
+    const sevRank = { extreme: 4, severe: 3, moderate: 2, minor: 1 };
+    return (data.alerts || []).map((a) => {
+      const onsetMs = a.onset ? Date.parse(a.onset) : NaN;
+      const expiresMs = a.expires ? Date.parse(a.expires) : NaN;
+      const started = Number.isNaN(onsetMs) || onsetMs <= now;
+      const ended = !Number.isNaN(expiresMs) && expiresMs <= now;
+      return {
+        event: a.event_de || a.event_en || a.event || '',
+        eventEn: a.event_en || a.event_de || '',
+        headline: a.headline_de || a.headline_en || '',
+        headlineEn: a.headline_en || a.headline_de || '',
+        description: a.description_de || a.description_en || '',
+        descriptionEn: a.description_en || a.description_de || '',
+        instruction: a.instruction_de || a.instruction_en || '',
+        instructionEn: a.instruction_en || a.instruction_de || '',
+        severity: (a.severity || 'minor').toLowerCase(),
+        onset: a.onset, expires: a.expires,
+        active: started && !ended,
+        ended,
+      };
+    })
+      .filter((a) => !a.ended) // hide warnings that already ran out (e.g. yesterday's gusts)
+      .sort((x, y) => (Number(y.active) - Number(x.active))
+        || ((sevRank[y.severity] || 0) - (sevRank[x.severity] || 0))
+        || ((x.onset ? Date.parse(x.onset) : 0) - (y.onset ? Date.parse(y.onset) : 0)));
   } catch {
     return [];
   }
