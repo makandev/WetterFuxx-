@@ -12,7 +12,7 @@ import {
   placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
   bumpStreak, getStreak, openedOn,
 } from './store.js';
-import { buildShareBlob } from './sharecard.js';
+import { buildShareBlob, buildFamilyBlob, SHARE_BUILDERS } from './sharecard.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -187,6 +187,7 @@ async function selectPlace(place, updateHistory = true) {
 
 // Family dashboard: live current conditions for every saved place
 let familyReqId = 0;
+let lastFamily = null;
 async function refreshFamily() {
   const places = loadPlaces();
   const reqId = ++familyReqId;
@@ -198,6 +199,7 @@ async function refreshFamily() {
   renderFamily(places, new Array(places.length).fill(null), currentPlace && currentPlace.id);
   const currents = await Promise.all(places.map((p) => getCurrentBrief(p, settings.units)));
   if (reqId !== familyReqId) return; // superseded
+  lastFamily = { places, currents };
   renderFamily(places, currents, currentPlace && currentPlace.id);
   renderCompare(places, currents, settings);
   wireFamilyRows(places);
@@ -335,28 +337,48 @@ function updateStar() {
 }
 
 // ---- Share -------------------------------------------------------------------
-async function share() {
-  if (!currentPlace) return;
-  const url = shareURL(currentPlace);
-  const text = t('shareText', { place: currentPlace.name });
-  // Try sharing a rendered weather image (best on mobile)
-  try {
-    if (currentData && navigator.canShare) {
-      const blob = await buildShareBlob(currentData, settings);
-      if (blob) {
-        const file = new File([blob], 'wetterfux.png', { type: 'image/png' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], title: t('appName'), text, url });
-          return;
-        }
+// Share a rendered PNG (native file-share on mobile), else download it and copy
+// the link — so every device ends with something shareable.
+async function shareBlob(blob, { text, url, filename = 'wetterfux.png' }) {
+  if (blob && navigator.canShare) {
+    try {
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: t('appName'), text, url });
+        return;
       }
-    }
-  } catch { /* fall through to link sharing */ }
+    } catch (e) { if (e && e.name === 'AbortError') return; /* else fall through */ }
+  }
+  // Desktop / no file-share: save the image and copy the link.
+  if (blob) {
+    const dl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = dl; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(dl), 1000);
+    try { await navigator.clipboard.writeText(url); toast(t('imgSaved')); }
+    catch { toast(t('imgSavedNoLink')); }
+    return;
+  }
+  // No image at all → link fallback.
   if (navigator.share) {
-    try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
+    try { await navigator.share({ title: t('appName'), text, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
   }
   try { await navigator.clipboard.writeText(url); toast(t('copied')); }
   catch { prompt(t('share'), url); }
+}
+
+async function share() { return shareView('current'); }
+
+// Build one of the per-card views and share it.
+async function shareView(kind) {
+  if (!currentPlace || !currentData) return;
+  const url = shareURL(currentPlace);
+  const text = t('shareText', { place: currentPlace.name });
+  let blob = null;
+  try { blob = await (SHARE_BUILDERS[kind] || SHARE_BUILDERS.current)(currentData, settings); }
+  catch (e) { console.error(e); }
+  await shareBlob(blob, { text, url });
 }
 
 async function shareFamily() {
@@ -364,11 +386,14 @@ async function shareFamily() {
   if (places.length < 2) return;
   const url = familyURL(places);
   const text = getLang() === 'en' ? 'Our family weather – with Wetterfux' : 'Unser Familien-Wetter – mit Wetterfux';
-  if (navigator.share) {
-    try { await navigator.share({ title: t('appName'), text, url }); return; } catch { /* cancelled */ }
-  }
-  try { await navigator.clipboard.writeText(url); toast(t('copied')); }
-  catch { prompt(t('share'), url); }
+  let blob = null;
+  try {
+    const fam = lastFamily && lastFamily.places.length === places.length
+      ? lastFamily
+      : { places, currents: await Promise.all(places.map((p) => getCurrentBrief(p, settings.units))) };
+    blob = await buildFamilyBlob(fam.places, fam.currents);
+  } catch (e) { console.error(e); }
+  await shareBlob(blob, { text, url, filename: 'wetterfux-familie.png' });
 }
 
 // ---- Settings panel ----------------------------------------------------------
@@ -443,6 +468,11 @@ function wireEvents() {
   $('#btnLocate').addEventListener('click', tryGeolocation);
   $('#btnStar').addEventListener('click', toggleStar);
   $('#btnShare').addEventListener('click', share);
+  // Per-card share buttons (delegated): a small ↗ in each card title.
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-share]');
+    if (b) { e.stopPropagation(); shareView(b.dataset.share); }
+  });
   $('#family').addEventListener('click', (e) => {
     if (e.target.closest('.fam-share')) shareFamily();
     else if (e.target.closest('.fam-add-btn')) openSearch();

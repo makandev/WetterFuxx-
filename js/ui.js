@@ -19,6 +19,11 @@ import {
 
 const $ = (sel) => document.querySelector(sel);
 
+// Small share button (↗) for a card title — shares that view as an image.
+function shareBtn(kind) {
+  return `<button class="card-share" data-share="${kind}" title="${t('share')}" aria-label="${t('share')}">↗</button>`;
+}
+
 export function renderAll(data, settings) {
   const c = data.forecast.current;
   setPlaceTz(data.forecast.utc_offset_seconds);
@@ -132,7 +137,7 @@ function renderClothing(data, s) {
   const w = a.why;
   const whyText = `${t('feelsLike')} <b>${w.feels}${w.tempUnit}</b> · ${t('windGust')} <b>${w.gust} ${w.windUnit}</b> · ${t('precipProb')} <b>${w.pop}%</b> · UV <b>${w.uv}</b>`;
   box.innerHTML = `
-    <div class="card-title">🧥 ${t('clothing')}</div>
+    <div class="card-title has-share">🧥 ${t('clothing')}${shareBtn('clothing')}</div>
     <div class="cloth-head">
       <div class="cloth-fox" aria-hidden="true">${foxSVG(a.mascot)}</div>
       <div class="cloth-headtext">
@@ -749,7 +754,7 @@ function renderNowcast(data) {
   }).join('');
 
   box.innerHTML = `
-    <div class="card-title">🌧️ ${t('nowcast')}</div>
+    <div class="card-title has-share">🌧️ ${t('nowcast')}${shareBtn('rain')}</div>
     <div class="nc-msg ${anyRain ? 'wet' : 'dry'}">${msg}</div>
     <div class="nc-chart">${bars}</div>`;
 }
@@ -834,7 +839,7 @@ function renderSixHour(data, s) {
     </div>`;
   }).join('');
   box.hidden = false;
-  box.innerHTML = `<div class="card-title">⏱️ ${en ? 'Next 6 hours' : 'Nächste 6 Stunden'}</div><div class="sh-list">${rows}</div>`;
+  box.innerHTML = `<div class="card-title has-share">⏱️ ${en ? 'Next 6 hours' : 'Nächste 6 Stunden'}${shareBtn('six')}</div><div class="sh-list">${rows}</div>`;
 }
 
 // ---- Hourly (48h) — combined chart: temp area + precip bars + day/night ------
@@ -1062,7 +1067,7 @@ function renderDaily(data, s) {
     </div>`;
   }).join('');
 
-  $('#daily').innerHTML = `<div class="card-title">${t('daily')}</div><div class="days">${rows}</div>`;
+  $('#daily').innerHTML = `<div class="card-title has-share">${t('daily')}${shareBtn('daily')}</div><div class="days">${rows}</div>`;
 
   // Tap a day to expand its hourly detail (built lazily)
   $('#daily').querySelectorAll('.day-row').forEach((btn) => {
