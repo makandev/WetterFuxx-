@@ -309,6 +309,20 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .fam-title { display: flex; align-items: center; justify-content: space-between; }
 .fam-share { background: var(--card-bg-2); border: 1px solid var(--card-brd); color: var(--text-dim); border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; }
 .fam-share:active { transform: scale(0.96); }
+
+/* ---- Per-card share button ---- */
+.card-title.has-share { display: flex; align-items: center; gap: 8px; }
+.card-share {
+  margin-left: auto; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card-bg-2); border: 1px solid var(--card-brd);
+  color: var(--text-dim); font-size: 15px; font-weight: 700; line-height: 1;
+  cursor: pointer; text-transform: none; letter-spacing: 0;
+  transition: transform .12s ease, color .12s ease, background .12s ease;
+}
+.card-share:hover { color: var(--text); }
+.card-share:active { transform: scale(0.92); }
 .fam-empty { font-size: 14px; color: var(--text-dim); line-height: 1.55; margin-bottom: 14px; }
 .fam-add-btn { width: 100%; background: var(--accent); color: #1a1400; border: none; border-radius: 12px; padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
 .fam-add-btn:active { transform: scale(0.98); }
