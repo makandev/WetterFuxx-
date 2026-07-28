@@ -11,7 +11,7 @@ Wetterfux ist eine **PWA** – eine Web-App, die sich wie eine echte App install
 Kein App-Store, keine APK, kein Play-Store-Konto.
 
 1. Schicke der Familie den Link zur veröffentlichten App
-   (z. B. `https://<benutzer>.github.io/ClaudeCode1/` – siehe `README.md`, Abschnitt „So veröffentlichst du die App").
+   (z. B. `https://<benutzer>.github.io/<repo-name>/` – siehe `README.md`, Abschnitt „So veröffentlichst du die App").
 2. Auf dem Handy im Browser öffnen und installieren:
    - **Android / Chrome:** Menü ⋮ → **„App installieren"** (oder „Zum Startbildschirm hinzufügen")
    - **iPhone / Safari:** Teilen-Symbol → **„Zum Home-Bildschirm"**
@@ -55,15 +55,9 @@ So bekommst du einen dauerhaften Link zur `.apk`:
 5. Rechtsklick auf die angehängte `.apk` → **Link kopieren**. Dieser Link ist dein Download-Link:
 
    ```
-   https://github.com/<benutzer>/ClaudeCode1/releases/download/v1.0/wetterfux.apk
+   https://github.com/<benutzer>/<repo-name>/releases/download/v1.0/wetterfux.apk
    ```
 
 Diesen Link an die Familie schicken. Beim Antippen auf einem Android-Handy startet der Download;
 danach die Datei öffnen und installieren (evtl. muss einmalig „Installation aus unbekannten
 Quellen" für den Browser erlaubt werden).
-
----
-
-## Was soll ich als Nächstes tun?
-Sag Bescheid, sobald die App online ist – dann kann ich beim Ausfüllen der
-`.well-known/assetlinks.json` (Fingerprint) helfen und den Release-Text vorbereiten.
