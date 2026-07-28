@@ -323,6 +323,9 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 }
 .card-share:hover { color: var(--text); }
 .card-share:active { transform: scale(0.92); }
+.card-title.has-share .title-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.title-actions .card-share { margin-left: 0; }
+.card-share--text { width: auto; padding: 0 12px; border-radius: 999px; font-size: 12px; }
 .fam-empty { font-size: 14px; color: var(--text-dim); line-height: 1.55; margin-bottom: 14px; }
 .fam-add-btn { width: 100%; background: var(--accent); color: #1a1400; border: none; border-radius: 12px; padding: 11px; font-weight: 700; font-size: 14px; cursor: pointer; }
 .fam-add-btn:active { transform: scale(0.98); }
