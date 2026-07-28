@@ -11,6 +11,8 @@ import {
 } from './format.js';
 import { t, getLang } from './i18n.js';
 import { buildClothingAdvice } from './advice.js';
+import { qrModules } from './qr.js';
+import { shareURL, familyURL } from './store.js';
 
 // ---- Canvas toolkit ---------------------------------------------------------
 const W = 1080, PAD = 72;
@@ -107,14 +109,37 @@ function header(ctx, { place, sub }) {
   }
   ctx.restore();
 }
-function footer(ctx, H) {
+// Render a scannable QR of `url` on a white rounded tile (with quiet zone).
+function drawQR(ctx, url, x, y, box) {
+  let qr;
+  try { qr = qrModules(url); } catch { qr = null; }
+  if (!qr) return;
+  const quiet = 4, total = qr.size + quiet * 2, mp = box / total;
+  ctx.save(); shadowOff(ctx);
+  roundRect(ctx, x, y, box, box, 14); ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.fillStyle = '#0b1428';
+  for (let r = 0; r < qr.size; r++) for (let c = 0; c < qr.size; c++) {
+    if (qr.modules[r][c]) ctx.fillRect(x + (quiet + c) * mp, y + (quiet + r) * mp, mp + 0.6, mp + 0.6);
+  }
+  ctx.restore();
+}
+function footer(ctx, H, url) {
   const en = getLang() === 'en';
-  ctx.save(); ctx.textAlign = 'center'; shadowOn(ctx);
-  emoji(ctx, '🦊', W / 2 - 118, H - 100, 52);
-  ctx.fillStyle = '#fff'; ctx.font = FONT(600, 50);
-  ctx.fillText('Wetterfux', W / 2 + 26, H - 100);
-  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = FONT(400, 31);
-  ctx.fillText(en ? 'free weather for the whole family' : 'kostenloses Wetter für die ganze Familie', W / 2, H - 54);
+  const qrBox = 188, qx = W - PAD - qrBox, qy = H - qrBox - 20;
+  if (url) {
+    drawQR(ctx, url, qx, qy, qrBox);
+    ctx.save(); ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = FONT(600, 26);
+    ctx.fillText(en ? 'scan → open' : 'scannen → öffnen', qx + qrBox / 2, qy - 14);
+    ctx.restore();
+  }
+  // Branding, nudged left when a QR sits in the corner so nothing collides.
+  const cx = url ? 430 : W / 2;
+  ctx.save(); ctx.textAlign = 'left'; shadowOn(ctx);
+  emoji(ctx, '🦊', cx - 150, H - 96, 50);
+  ctx.fillStyle = '#fff'; ctx.font = FONT(600, 48);
+  ctx.fillText('Wetterfux', cx - 92, H - 96);
+  ctx.fillStyle = 'rgba(255,255,255,0.72)'; ctx.font = FONT(400, 29);
+  ctx.fillText(en ? 'free weather for the family' : 'kostenloses Wetter für die Familie', cx - 150, H - 52);
   ctx.restore();
 }
 function toBlob(cv) { return new Promise((res) => cv.toBlob(res, 'image/png')); }
@@ -155,7 +180,7 @@ export async function buildCurrentBlob(data) {
   ctx.fillText(`${en ? 'Feels like' : 'Gefühlt'} ${tempStr(c.apparent_temperature)}`, W / 2, 948);
   ctx.restore();
 
-  footer(ctx, H);
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -226,7 +251,7 @@ export async function buildRainBlob(data) {
     ctx.fillText(formatHour(iso), box.x + i * (bw + gap) + bw / 2, box.y + box.h + 50);
   });
 
-  footer(ctx, H);
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -291,7 +316,7 @@ export async function buildSixHourBlob(data) {
     }
   });
 
-  footer(ctx, H);
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -342,7 +367,7 @@ export async function buildDailyBlob(data, settings) {
     ctx.restore();
   }
 
-  footer(ctx, H);
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -387,7 +412,7 @@ export async function buildClothingBlob(data, settings) {
   ctx.fillText(umb, W / 2, Math.min(y + 40, H - 180));
   ctx.restore();
 
-  footer(ctx, H);
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -409,8 +434,8 @@ export async function buildFamilyBlob(places, currents) {
     if ((r.cur.pop ?? 100) < (rows[dry].cur.pop ?? 100)) dry = i;
   });
 
-  const top = 240, maxRows = Math.min(rows.length, 8);
-  const rowH = Math.min(150, (H - top - 170) / maxRows);
+  const top = 240, maxRows = Math.min(rows.length, 6); // keep clear of the footer QR
+  const rowH = Math.min(150, (H - top - 260) / maxRows);
   for (let i = 0; i < maxRows; i++) {
     const { p, cur } = rows[i];
     const y = top + i * rowH;
@@ -429,7 +454,53 @@ export async function buildFamilyBlob(places, currents) {
     ctx.restore();
   }
 
-  footer(ctx, H);
+  footer(ctx, H, familyURL(places));
+  return toBlob(cv);
+}
+
+// Weekend — the upcoming Saturday + Sunday as two big tiles. The most-asked
+// WhatsApp weather question ("what's the weekend doing?").
+export async function buildWeekendBlob(data) {
+  const pal = prep(data);
+  const d = data.forecast.daily;
+  const en = getLang() === 'en';
+  // pick the next up-to-two weekend days within the forecast window
+  const wk = [];
+  for (let i = 0; i < Math.min(9, d.time.length) && wk.length < 2; i++) {
+    if (isWeekend(d.time[i])) wk.push(i);
+  }
+  if (!wk.length) return buildDailyBlob(data);
+
+  const H = 1350;
+  const { cv, ctx } = createCard(H);
+  paintBg(ctx, pal, H);
+  header(ctx, { place: placeLabel(data.place), sub: en ? 'Your weekend' : 'Dein Wochenende' });
+
+  const n = wk.length;
+  const gap = 44, tileW = (W - 2 * PAD - (n - 1) * gap) / n, tileH = 620, top = 300;
+  wk.forEach((i, k) => {
+    const x = PAD + k * (tileW + gap);
+    glass(ctx, x, top, tileW, tileH, 40);
+    const cx = x + tileW / 2;
+    ctx.save(); ctx.textAlign = 'center'; shadowOn(ctx);
+    ctx.fillStyle = ACCENT; ctx.font = FONT(700, 52);
+    ctx.fillText(dayLabel(d.time[i], i), cx, top + 90);
+    ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = FONT(400, 34);
+    ctx.fillText(shortDate(d.time[i]), cx, top + 138);
+    ctx.restore();
+    emoji(ctx, ico(d.weather_code[i]), cx, top + 320, 150);
+    ctx.save(); ctx.textAlign = 'center'; shadowOn(ctx);
+    ctx.fillStyle = '#fff'; ctx.font = FONT(300, 92);
+    ctx.fillText(`${tempStr(d.temperature_2m_max[i])} / ${tempStr(d.temperature_2m_min[i])}`, cx, top + 430);
+    const pp = d.precipitation_probability_max ? (d.precipitation_probability_max[i] || 0) : 0;
+    ctx.fillStyle = '#9fc0ff'; ctx.font = FONT(600, 40);
+    ctx.fillText(`💧 ${pp}%`, cx, top + 520);
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.font = FONT(400, 34);
+    ctx.fillText(fit(ctx, describe(d.weather_code[i], getLang()), tileW - 40), cx, top + 578);
+    ctx.restore();
+  });
+
+  footer(ctx, H, shareURL(data.place));
   return toBlob(cv);
 }
 
@@ -442,5 +513,6 @@ export const SHARE_BUILDERS = {
   rain: buildRainBlob,
   six: buildSixHourBlob,
   daily: buildDailyBlob,
+  weekend: buildWeekendBlob,
   clothing: buildClothingBlob,
 };
