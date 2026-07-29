@@ -694,6 +694,8 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .vi-setup code { background: rgba(255,255,255,0.12); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
 .visitors-body a { color: var(--accent); }
 .visitors-body a.btn { color: #fff; text-decoration: none; }
+.install-steps { margin: 4px 0 0; padding-left: 22px; font-size: 14.5px; line-height: 1.6; }
+.install-steps li { margin: 8px 0; }
 
 /* ---- Toast ---- */
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); z-index: 60; background: rgba(20,30,50,0.95); color: #fff; padding: 12px 20px; border-radius: 999px; font-size: 14px; font-weight: 600; opacity: 0; pointer-events: none; transition: opacity .3s ease, transform .3s ease; box-shadow: 0 8px 24px rgba(0,0,0,0.35); }
