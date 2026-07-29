@@ -9,7 +9,7 @@
 //      e.g. "wetterfux" → your dashboard is https://wetterfux.goatcounter.com
 //   2. Put that code in GC_CODE below and deploy.
 // Until GC_CODE is set, NOTHING external loads and no one is counted.
-export const GC_CODE = '';
+export const GC_CODE = 'makandev';
 
 const base = () => `https://${GC_CODE}.goatcounter.com`;
 export const dashboardURL = () => (GC_CODE ? base() : null);
