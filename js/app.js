@@ -13,6 +13,7 @@ import {
   bumpStreak, getStreak, openedOn,
 } from './store.js';
 import { buildShareBlob, buildFamilyBlob, SHARE_BUILDERS } from './sharecard.js';
+import { initAnalytics, fetchVisitorTotal, dashboardURL, isConfigured } from './analytics.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -26,6 +27,7 @@ async function boot() {
   setLang(settings.lang);
   applyTheme(settings.theme);
   applyStaticText();
+  initAnalytics();
   initEffects($('#bg-canvas'));
   wireEvents();
   wireTabs();
@@ -409,6 +411,48 @@ function openSettings() {
   buildLayoutList();
 }
 function closeSettings() { $('#settingsPanel').classList.remove('open'); }
+
+// ---- Visitor stats popup -----------------------------------------------------
+function openVisitors() {
+  $('#visitorsOverlay').classList.add('open');
+  renderVisitors();
+}
+function closeVisitors() { $('#visitorsOverlay').classList.remove('open'); }
+
+async function renderVisitors() {
+  const en = getLang() === 'en';
+  const body = $('#visitorsBody');
+  const privacy = en
+    ? 'Counts visits and rough country only — no cookies, no personal data, no tracking.'
+    : 'Zählt nur Besuche und grobes Land – keine Cookies, keine persönlichen Daten, kein Tracking.';
+
+  if (!isConfigured()) {
+    body.innerHTML = `
+      <p class="vi-lead">${privacy}</p>
+      <div class="vi-setup">
+        <b>${en ? 'One-time setup (about 2 min):' : 'Einmalig einrichten (ca. 2 Min.):'}</b>
+        <ol>
+          <li>${en ? 'Create a free account at' : 'Kostenloses Konto anlegen bei'} <a href="https://www.goatcounter.com/" target="_blank" rel="noopener">goatcounter.com</a> ${en ? 'and pick a code (e.g. "wetterfux").' : 'und einen Code wählen (z. B. „wetterfux").'}</li>
+          <li>${en ? 'Enter that code in' : 'Diesen Code eintragen in'} <code>js/analytics.js</code> → <code>GC_CODE</code>.</li>
+        </ol>
+        <p class="vi-note">${en
+          ? 'Daily / weekly / monthly visits and countries then appear on your private GoatCounter dashboard; this popup shows the total.'
+          : 'Tägliche / wöchentliche / monatliche Besuche und Länder erscheinen dann in deinem privaten GoatCounter-Dashboard; dieses Fenster zeigt die Gesamtzahl.'}</p>
+      </div>`;
+    return;
+  }
+
+  body.innerHTML = `<p class="vi-lead">${privacy}</p><div class="vi-count"><span class="vi-num">…</span><span class="vi-lbl">${en ? 'visits total' : 'Besuche gesamt'}</span></div>`;
+  const total = await fetchVisitorTotal();
+  const url = dashboardURL();
+  body.innerHTML = `
+    <p class="vi-lead">${privacy}</p>
+    <div class="vi-count"><span class="vi-num">${total != null ? escapeHtml(total) : '—'}</span><span class="vi-lbl">${en ? 'visits total' : 'Besuche gesamt'}</span></div>
+    <p class="vi-note">${en
+      ? 'For daily / weekly / monthly and countries, open your dashboard:'
+      : 'Für täglich / wöchentlich / monatlich und Länder öffne dein Dashboard:'}</p>
+    <a class="btn btn-block" href="${url}" target="_blank" rel="noopener">${en ? 'Open full statistics ↗' : 'Vollständige Statistik öffnen ↗'}</a>`;
+}
 function onSettingChange(e) {
   const key = e.target.dataset.set;
   const val = e.target.value;
@@ -484,10 +528,13 @@ function wireEvents() {
   $('#btnSettings').addEventListener('click', openSettings);
   $('#settingsClose').addEventListener('click', closeSettings);
   $('#settingsPanel').addEventListener('click', (e) => { if (e.target.id === 'settingsPanel') closeSettings(); });
+  $('#btnVisitors').addEventListener('click', openVisitors);
+  $('#visitorsClose').addEventListener('click', closeVisitors);
+  $('#visitorsOverlay').addEventListener('click', (e) => { if (e.target.id === 'visitorsOverlay') closeVisitors(); });
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeSearch(); closeSettings(); }
+    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); }
     if (e.key === '/' && !isTyping()) { e.preventDefault(); openSearch(); }
   });
   document.addEventListener('visibilitychange', () => {
