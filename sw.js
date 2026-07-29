@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v23';
+const CACHE = 'wetterfux-v24';
 const SHELL = [
   './',
   './index.html',

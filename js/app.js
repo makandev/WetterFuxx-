@@ -534,7 +534,7 @@ function wireEvents() {
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); }
+    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); closeInstallHelp(); }
     if (e.key === '/' && !isTyping()) { e.preventDefault(); openSearch(); }
   });
   document.addEventListener('visibilitychange', () => {
@@ -726,25 +726,72 @@ function wireWelcome() {
   $('#savedEmpty').addEventListener('click', openSearch);
 }
 
-// ---- Install prompt (Android/Desktop) ---------------------------------------
+// ---- Install prompt ----------------------------------------------------------
+// Android/desktop Chromium fire `beforeinstallprompt` → we show a real install
+// button. iOS Safari never fires it (Apple has no programmatic install), so on
+// iPhone/iPad we show the button anyway and explain the manual Share → "Add to
+// Home Screen" step instead.
 let deferredPrompt = null;
+function isIOS() {
+  const ua = navigator.userAgent || '';
+  const iPhone = /iPad|iPhone|iPod/.test(ua);
+  const iPadOS = navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1;
+  return iPhone || iPadOS;
+}
+function isStandalone() {
+  return window.navigator.standalone === true
+    || window.matchMedia('(display-mode: standalone)').matches;
+}
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
   const btn = $('#btnInstall');
-  if (btn) btn.hidden = false;
+  if (btn) { btn.hidden = false; btn.dataset.ios = ''; }
 });
 function wireInstall() {
   const btn = $('#btnInstall');
   if (!btn) return;
+  // iOS: no automatic prompt exists → show the button with manual guidance.
+  if (isIOS() && !isStandalone()) { btn.hidden = false; btn.dataset.ios = '1'; }
   btn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
+    if (btn.dataset.ios === '1') { openInstallHelp(); return; }
+    if (!deferredPrompt) { openInstallHelp(); return; }
     deferredPrompt.prompt();
     try { await deferredPrompt.userChoice; } catch { /* ignore */ }
     deferredPrompt = null;
     btn.hidden = true;
   });
+  $('#installClose').addEventListener('click', closeInstallHelp);
+  $('#installOverlay').addEventListener('click', (e) => { if (e.target.id === 'installOverlay') closeInstallHelp(); });
   window.addEventListener('appinstalled', () => { btn.hidden = true; deferredPrompt = null; });
+}
+function closeInstallHelp() { $('#installOverlay').classList.remove('open'); }
+function openInstallHelp() {
+  const en = getLang() === 'en';
+  const ios = isIOS();
+  $('#installHelpTitle').textContent = t('installApp');
+  // iOS Safari share glyph (square with an up arrow)
+  const shareIcon = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style="vertical-align:-4px"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 3v12M8 7l4-4 4 4M6 12v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-7"/></svg>';
+  const steps = ios
+    ? [
+        en ? `Tap the Share button ${shareIcon} (bottom of Safari, or top-right).`
+           : `Tippe auf das Teilen-Symbol ${shareIcon} (unten in Safari, oder oben rechts).`,
+        en ? 'Choose <b>“Add to Home Screen”</b>.' : 'Wähle <b>„Zum Home-Bildschirm"</b>.',
+        en ? 'Confirm with <b>“Add”</b> — done!' : 'Mit <b>„Hinzufügen"</b> bestätigen – fertig!',
+      ]
+    : [
+        en ? 'Open your browser menu (⋮ or ⋯).' : 'Öffne das Browser-Menü (⋮ oder ⋯).',
+        en ? 'Choose <b>“Install app”</b> / <b>“Add to Home screen”</b>.' : 'Wähle <b>„App installieren"</b> / <b>„Zum Startbildschirm hinzufügen"</b>.',
+      ];
+  const note = ios
+    ? (en ? 'Apple doesn’t allow one-tap install — this quick route via Safari is the official way.'
+          : 'Apple erlaubt kein Ein-Tipp-Installieren – dieser kurze Weg über Safari ist der offizielle.')
+    : '';
+  $('#installBody').innerHTML = `
+    <p class="vi-lead">${en ? 'Add Wetterfux to your home screen so it runs like a real app — full screen and offline.' : 'Leg Wetterfux auf den Startbildschirm – dann läuft es wie eine echte App, im Vollbild und offline.'}</p>
+    <ol class="install-steps">${steps.map((s) => `<li>${s}</li>`).join('')}</ol>
+    ${note ? `<p class="vi-note">${note}</p>` : ''}`;
+  $('#installOverlay').classList.add('open');
 }
 
 // ---- Offline awareness -------------------------------------------------------
