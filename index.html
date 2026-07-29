@@ -224,8 +224,20 @@
         <span id="layoutTitle">🧩 Karten anpassen</span>
       </div>
       <div id="layoutList" class="layout-list"></div>
+      <button id="btnVisitors" class="set-btn" type="button"><span>📊 Besucher</span><span class="set-arrow" aria-hidden="true">›</span></button>
       <button id="btnInstall" class="btn btn-block install-btn" hidden>📲 App installieren</button>
       <p class="install-hint">📲 Tipp: „Zum Startbildschirm hinzufügen“ – dann läuft Wetterfux wie eine echte App.</p>
+    </div>
+  </div>
+
+  <!-- Visitor stats popup -->
+  <div id="visitorsOverlay" class="overlay">
+    <div class="overlay-card">
+      <div class="settings-head">
+        <h2>📊 Besucher</h2>
+        <button id="visitorsClose" class="icon-btn" aria-label="Schließen">✕</button>
+      </div>
+      <div id="visitorsBody" class="visitors-body"></div>
     </div>
   </div>
 
