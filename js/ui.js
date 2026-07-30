@@ -684,30 +684,17 @@ function renderAlerts(data, s) {
   const official = data.officialAlerts || [];
   if (official.length) {
     const en = getLang() === 'en';
+    // Safety rule: an ACTIVE severe/extreme warning must stay visible (never
+    // hidden behind a collapse). Everything else (upcoming, or minor/moderate)
+    // may be summarised into a compact, collapsible bar.
+    const pinned = official.filter((a) => a.active && ALERT_RANK[a.severity] >= 3);
+    const rest = official.filter((a) => !(a.active && ALERT_RANK[a.severity] >= 3));
+    const parts = [];
+    pinned.forEach((a, i) => parts.push(alertRow(a, en, i === 0))); // top one opened
+    if (rest.length === 1) parts.push(alertRow(rest[0], en, false));
+    else if (rest.length >= 2) parts.push(alertBar(rest, en, !!(s.ui && s.ui.alertsExpanded), pinned.length > 0));
     box.hidden = false;
-    box.innerHTML = official.slice(0, 4).map((a) => {
-      const sev = sevInfo(a.severity);
-      const head = en ? (a.headlineEn || a.eventEn) : (a.headline || a.event);
-      const win = alertWindow(a, en);
-      const desc = en ? (a.descriptionEn || a.description) : (a.description || a.descriptionEn);
-      const instr = en ? (a.instructionEn || a.instruction) : (a.instruction || a.instructionEn);
-      const hasDetails = !!(desc || instr);
-      const upcoming = a.active === false;
-      const badge = upcoming ? `<span class="alert-tag">${en ? 'upcoming' : 'bevorstehend'}</span>` : '';
-      const chev = hasDetails ? '<span class="alert-chev" aria-hidden="true">⌄</span>' : '';
-      const detail = hasDetails ? `<div class="alert-detail">
-          ${desc ? `<p>${escapeHtml(desc)}</p>` : ''}
-          ${instr ? `<p class="alert-instr"><b>${en ? 'What to do' : 'Verhalten'}:</b> ${escapeHtml(instr)}</p>` : ''}
-        </div>` : '';
-      return `<details class="alert sev-${sev.key}${upcoming ? ' upcoming' : ''}${hasDetails ? '' : ' bare'}">
-        <summary class="alert-sum">
-          <span class="alert-ic">${sev.icon}</span>
-          <span class="alert-body"><span class="alert-head"><b>${sev.label}</b>${badge}</span>${escapeHtml(head)}<small>${escapeHtml(win)}</small></span>
-          ${chev}
-        </summary>
-        ${detail}
-      </details>`;
-    }).join('');
+    box.innerHTML = parts.join('');
     return;
   }
 
@@ -745,6 +732,82 @@ function sevInfo(sev) {
     case 'moderate': return { key: 'moderate', icon: '🟠', label: t('sevModerate') };
     default: return { key: 'minor', icon: '🟡', label: t('sevMinor') };
   }
+}
+const ALERT_RANK = { extreme: 4, severe: 3, moderate: 2, minor: 1 };
+// Title-case a shouty DWD string: "SCHWERE STURMBÖEN" → "Schwere Sturmböen".
+function titleCase(str) {
+  return String(str || '').toLowerCase().replace(/(^|[\s\-–/])([\p{L}])/gu, (m, p1, p2) => p1 + p2.toUpperCase());
+}
+// Short, calm label from the event name (the loud headline lives in the detail).
+function alertShort(a, en) {
+  const ev = en ? (a.eventEn || a.event) : (a.event || a.eventEn);
+  if (ev) return titleCase(ev);
+  const head = en ? (a.headlineEn || a.headline) : (a.headline || a.headlineEn);
+  return head ? titleCase(head).slice(0, 40) : (en ? 'Weather warning' : 'Wetterwarnung');
+}
+// One compact, expandable warning row.
+function alertRow(a, en, open) {
+  const sev = sevInfo(a.severity);
+  const short = alertShort(a, en);
+  // Compact row: show one primary time (upcoming → start, active → end).
+  // The full "ab … bis …" range stays in alertWindow inside the detail.
+  const win = a.active === false
+    ? (a.onset ? `${en ? 'from ' : 'ab '}${formatWhen(a.onset)}` : '')
+    : (a.expires ? `${en ? 'until ' : 'bis '}${formatWhen(a.expires)}` : '');
+  const desc = en ? (a.descriptionEn || a.description) : (a.description || a.descriptionEn);
+  const instr = en ? (a.instructionEn || a.instruction) : (a.instruction || a.instructionEn);
+  const longhead = en ? (a.headlineEn || a.headline) : (a.headline || a.headlineEn);
+  const showLong = longhead && titleCase(longhead).toLowerCase() !== short.toLowerCase();
+  const hasDetails = !!(desc || instr || showLong);
+  const upcoming = a.active === false;
+  const badge = upcoming ? `<span class="alert-tag">${en ? 'upcoming' : 'bevorstehend'}</span>` : '';
+  const sub = `${sev.label}${badge ? ` ${badge}` : ''}${win ? ` · ${escapeHtml(win)}` : ''}`;
+  const fullWin = alertWindow(a, en);
+  const detail = hasDetails ? `<div class="alert-detail">
+      ${showLong ? `<p class="alert-longhead">${escapeHtml(longhead)}</p>` : ''}
+      ${fullWin ? `<p class="alert-fullwin">🕒 ${escapeHtml(fullWin)}</p>` : ''}
+      ${desc ? `<p>${escapeHtml(desc)}</p>` : ''}
+      ${instr ? `<p class="alert-instr"><b>${en ? 'What to do' : 'Verhalten'}:</b> ${escapeHtml(instr)}</p>` : ''}
+    </div>` : '';
+  return `<details class="alert alert-mini sev-${sev.key}${upcoming ? ' upcoming' : ''}${hasDetails ? '' : ' bare'}"${open && hasDetails ? ' open' : ''}>
+    <summary class="alert-sum">
+      <span class="alert-ic">${sev.icon}</span>
+      <span class="alert-mini-main"><b class="alert-title">${escapeHtml(short)}</b><small class="alert-win">${sub}</small></span>
+      ${hasDetails ? '<span class="alert-chev" aria-hidden="true">⌄</span>' : ''}
+    </summary>${detail}
+  </details>`;
+}
+// Collapsible summary bar for several non-critical warnings.
+function alertBar(list, en, expanded, hasPinned) {
+  const maxRank = list.reduce((m, a) => Math.max(m, ALERT_RANK[a.severity] || 1), 1);
+  const sevKey = maxRank >= 4 ? 'extreme' : maxRank >= 3 ? 'severe' : maxRank >= 2 ? 'moderate' : 'minor';
+  const chips = list.map((a) => alertShort(a, en)).filter(Boolean).join(' · ');
+  const label = hasPinned
+    ? (en ? `+${list.length} more` : `+${list.length} weitere`)
+    : (en ? `${list.length} official warnings` : `${list.length} amtliche Warnungen`);
+  // Window: latest end of active ones, else earliest start of upcoming ones.
+  const activeEnds = list.filter((a) => a.active && a.expires).map((a) => a.expires);
+  let win = '';
+  if (activeEnds.length) {
+    const latest = activeEnds.reduce((x, y) => (parseLocal(x).getTime() > parseLocal(y).getTime() ? x : y));
+    win = (en ? 'until ' : 'bis ') + formatWhen(latest);
+  } else {
+    const onsets = list.filter((a) => a.onset).map((a) => a.onset);
+    if (onsets.length) {
+      const earliest = onsets.reduce((x, y) => (parseLocal(x).getTime() < parseLocal(y).getTime() ? x : y));
+      win = (en ? 'from ' : 'ab ') + formatWhen(earliest);
+    }
+  }
+  const rows = list.map((a) => alertRow(a, en, false)).join('');
+  return `<div class="alert-group sev-${sevKey}">
+    <button class="alert-group-bar" aria-expanded="${expanded ? 'true' : 'false'}" aria-controls="alertGroupList" aria-label="${en ? `${list.length} weather warnings, expand` : `${list.length} Wetterwarnungen, aufklappen`}">
+      <span class="agb-ic" aria-hidden="true">⚠️</span>
+      <span class="agb-txt"><b>${label}</b><small class="agb-chips">${escapeHtml(chips)}</small></span>
+      ${win ? `<span class="agb-win">${escapeHtml(win)}</span>` : ''}
+      <span class="agb-chev" aria-hidden="true">⌄</span>
+    </button>
+    <div class="alert-list" id="alertGroupList"${expanded ? '' : ' hidden'}>${rows}</div>
+  </div>`;
 }
 
 // ---- Family dashboard --------------------------------------------------------
