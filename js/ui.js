@@ -690,6 +690,8 @@ function renderAlerts(data, s) {
     const pinned = official.filter((a) => a.active && ALERT_RANK[a.severity] >= 3);
     const rest = official.filter((a) => !(a.active && ALERT_RANK[a.severity] >= 3));
     const parts = [];
+    const cap = areaCaption(data.alertArea, data.place, en);
+    if (cap) parts.push(cap);
     pinned.forEach((a, i) => parts.push(alertRow(a, en, i === 0))); // top one opened
     if (rest.length === 1) parts.push(alertRow(rest[0], en, false));
     else if (rest.length >= 2) parts.push(alertBar(rest, en, !!(s.ui && s.ui.alertsExpanded), pinned.length > 0));
@@ -734,6 +736,20 @@ function sevInfo(sev) {
   }
 }
 const ALERT_RANK = { extreme: 4, severe: 3, moderate: 2, minor: 1 };
+// Which DWD area do these warnings cover? Compare the warn-cell name to the
+// place: if the cell names the place it's district-exact (🎯), otherwise it's
+// a broader area that still includes the place (📍).
+function areaCaption(area, place, en) {
+  if (!area || !area.name) return '';
+  const cell = area.name;
+  const pn = place && place.name ? place.name : '';
+  const exact = pn && cell.toLowerCase().includes(pn.toLowerCase());
+  if (exact) {
+    return `<p class="alert-area exact">🎯 ${en ? 'Valid exactly for' : 'Gilt genau für'} <b>${escapeHtml(cell)}</b></p>`;
+  }
+  const incl = pn ? (en ? ` · includes ${escapeHtml(pn)}` : ` · schließt ${escapeHtml(pn)} ein`) : '';
+  return `<p class="alert-area">📍 ${en ? 'Warning area' : 'Warngebiet'}: <b>${escapeHtml(cell)}</b>${incl}</p>`;
+}
 // Title-case a shouty DWD string: "SCHWERE STURMBÖEN" → "Schwere Sturmböen".
 function titleCase(str) {
   return String(str || '').toLowerCase().replace(/(^|[\s\-–/])([\p{L}])/gu, (m, p1, p2) => p1 + p2.toUpperCase());
