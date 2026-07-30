@@ -1307,41 +1307,64 @@ function renderDaily(data, s) {
 function buildDayDetail(data, dayIdx, s) {
   const d = data.forecast.daily;
   const h = data.forecast.hourly;
+  const en = getLang() === 'en';
   const dayIso = d.time[dayIdx];
   const target = parseLocal(dayIso);
   const td = target ? target.getUTCDate() : -1;
   const tm = target ? target.getUTCMonth() : -1;
+  const now = placeNowMs();
   const idxs = [];
   for (let i = 0; i < h.time.length; i++) {
     const dt = parseLocal(h.time[i]);
-    if (dt && dt.getUTCDate() === td && dt.getUTCMonth() === tm && dt.getUTCHours() % 2 === 0) idxs.push(i);
+    if (!dt || dt.getUTCDate() !== td || dt.getUTCMonth() !== tm || dt.getUTCHours() % 2 !== 0) continue;
+    if (dayIdx === 0 && dt.getTime() < now - 3600000) continue; // today: only hours from now on
+    idxs.push(i);
   }
-  const cols = idxs.map((i) => {
+  const cols = idxs.map((i, k) => {
     const dt = parseLocal(h.time[i]);
     const isDay = h.is_day ? h.is_day[i] === 1 : true;
     const pp = h.precipitation_probability ? h.precipitation_probability[i] : 0;
+    const label = (dayIdx === 0 && k === 0) ? t('now') : String(dt.getUTCHours()).padStart(2, '0');
     return `<div class="dd-col">
-      <span class="dd-time">${String(dt.getUTCHours()).padStart(2, '0')}</span>
+      <span class="dd-time">${label}</span>
       <span class="dd-ic">${weatherSVG(h.weather_code[i], isDay)}</span>
       <span class="dd-temp">${tempStr(h.temperature_2m[i])}</span>
       <span class="dd-pp">${pp ? `💧${pp}%` : ''}</span>
     </div>`;
   }).join('');
 
+  // Summary from daily — always available (works even without hourly data).
+  const hi = d.temperature_2m_max ? d.temperature_2m_max[dayIdx] : null;
+  const lo = d.temperature_2m_min ? d.temperature_2m_min[dayIdx] : null;
+  const fhi = d.apparent_temperature_max ? d.apparent_temperature_max[dayIdx] : null;
+  const flo = d.apparent_temperature_min ? d.apparent_temperature_min[dayIdx] : null;
+  const dPsum = d.precipitation_sum ? d.precipitation_sum[dayIdx] : null;
+  const pmax = d.precipitation_probability_max ? d.precipitation_probability_max[dayIdx] : null;
+  const dl = d.daylight_duration ? d.daylight_duration[dayIdx] : null;
+  const punit = s.units.temp === 'F' ? 'in' : 'mm';
+  const summary = [
+    hi != null && lo != null ? `<span class="dd-hilo">↑ ${tempStr(hi)}  ↓ ${tempStr(lo)}</span>` : null,
+    fhi != null && flo != null ? `<span>${en ? 'feels' : 'gefühlt'} ${tempStr(fhi)}/${tempStr(flo)}</span>` : null,
+    dPsum != null ? `<span>🌧️ ${num(dPsum, 1)} ${punit}${pmax ? ` · ${pmax}%` : ''}</span>` : null,
+    dl != null ? `<span>☀️ ${daylightStr(dl)}</span>` : null,
+  ].filter(Boolean).join('');
+
   const sr = parseLocal(d.sunrise ? d.sunrise[dayIdx] : null);
   const ss = parseLocal(d.sunset ? d.sunset[dayIdx] : null);
   const uvMax = d.uv_index_max ? d.uv_index_max[dayIdx] : null;
   const gust = d.wind_gusts_10m_max ? d.wind_gusts_10m_max[dayIdx] : null;
-  const psum = d.precipitation_sum ? d.precipitation_sum[dayIdx] : null;
   const meta = [
     sr ? `🌅 ${formatTime(d.sunrise[dayIdx])}` : null,
     ss ? `🌇 ${formatTime(d.sunset[dayIdx])}` : null,
     gust != null ? `💨 ${num(gust)} ${windUnitLabel(s.units.wind)}` : null,
     uvMax != null ? `🔆 UV ${num(uvMax)}` : null,
-    psum != null ? `🌧️ ${num(psum, 1)} ${s.units.temp === 'F' ? 'in' : 'mm'}` : null,
   ].filter(Boolean).map((m) => `<span>${m}</span>`).join('');
 
-  return `<div class="dd-scroll"><div class="dd-cols">${cols}</div></div><div class="dd-meta">${meta}</div>`;
+  const hourly = idxs.length >= 2
+    ? `<div class="dd-scroll"><div class="dd-cols">${cols}</div></div>`
+    : `<p class="dd-nohours">${en ? 'Hourly detail not available for this day yet.' : 'Stundenwerte für diesen Tag noch nicht verfügbar.'}</p>`;
+
+  return `<div class="dd-summary">${summary}</div>${hourly}<div class="dd-meta">${meta}</div>`;
 }
 
 // ---- helpers -----------------------------------------------------------------
