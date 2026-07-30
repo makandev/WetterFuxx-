@@ -195,7 +195,7 @@ export async function getAlerts(lat, lon) {
     const data = await getJSON(ALERTS, { lat, lon });
     const now = Date.now();
     const sevRank = { extreme: 4, severe: 3, moderate: 2, minor: 1 };
-    return (data.alerts || []).map((a) => {
+    const list = (data.alerts || []).map((a) => {
       const onsetMs = a.onset ? Date.parse(a.onset) : NaN;
       const expiresMs = a.expires ? Date.parse(a.expires) : NaN;
       const started = Number.isNaN(onsetMs) || onsetMs <= now;
@@ -219,8 +219,14 @@ export async function getAlerts(lat, lon) {
       .sort((x, y) => (Number(y.active) - Number(x.active))
         || ((sevRank[y.severity] || 0) - (sevRank[x.severity] || 0))
         || ((x.onset ? Date.parse(x.onset) : 0) - (y.onset ? Date.parse(y.onset) : 0)));
+    // The DWD warn cell the coordinates resolved to — so we can show exactly
+    // which area the warnings cover (e.g. "Hamburg-Altona" vs "Stadt Hamburg").
+    const loc = data.location || {};
+    const areaName = loc.name || loc.name_short || loc.district || loc.state || '';
+    const area = areaName ? { name: areaName, district: loc.district || '', state: loc.state || '' } : null;
+    return { list, area };
   } catch {
-    return [];
+    return { list: [], area: null };
   }
 }
 
