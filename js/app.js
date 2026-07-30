@@ -166,12 +166,14 @@ async function selectPlace(place, updateHistory = true) {
     history.replaceState({}, '', url);
   }
   try {
-    const [data, officialAlerts] = await Promise.all([
+    const [data, alerts] = await Promise.all([
       getWeather(place, settings.units),
       getAlerts(place.lat, place.lon),
     ]);
     if (my !== selReqId) return; // a newer selection superseded this one
-    data.officialAlerts = officialAlerts;
+    data.officialAlerts = alerts.list;
+    data.alertArea = alerts.area;
+    data.place = place;
     currentData = data;
     const c = data.forecast.current;
     setScene(skyGroup(c.weather_code), c.is_day === 1);
