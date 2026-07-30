@@ -804,6 +804,9 @@ body[data-design="daylight"] .cloth-umb.no, body[data-design="sand"] .cloth-umb.
 .dd-ic svg { width: 100%; height: 100%; }
 .dd-temp { font-size: 13px; font-weight: 600; }
 .dd-pp { font-size: 10px; color: #9fc0ff; height: 12px; }
+.dd-summary { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 8px; font-size: 13px; color: var(--text-dim); }
+.dd-summary .dd-hilo { font-weight: 700; color: var(--text); }
+.dd-nohours { font-size: 13px; color: var(--text-dim); padding: 8px 2px; }
 .dd-meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; padding: 10px 12px; background: var(--card-bg-2); border-radius: 12px; font-size: 12.5px; color: var(--text-dim); }
 .polar-note { font-size: 15px; color: var(--text-dim); padding: 10px 0; }
 

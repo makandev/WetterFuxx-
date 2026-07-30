@@ -15,7 +15,12 @@ export function setPlaceTz(seconds) {
 export function parseLocal(iso) {
   if (!iso) return null;
   const hasTz = /[zZ]|[+-]\d\d:?\d\d$/.test(iso);
-  const d = new Date(hasTz ? iso : `${iso}Z`);
+  // Append "Z" only to date+time strings ("2026-07-30T14:00"). A bare date
+  // ("2026-07-30") already parses as UTC midnight everywhere — appending "Z"
+  // makes "2026-07-30Z", which Safari rejects as Invalid Date (Chrome tolerates
+  // it). That mismatch hid the hourly temperature row on iPhone.
+  const needsZ = !hasTz && iso.includes('T');
+  const d = new Date(needsZ ? `${iso}Z` : iso);
   return Number.isNaN(d.getTime()) ? null : d;
 }
 export function placeNowMs() {
