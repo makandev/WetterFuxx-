@@ -9,6 +9,7 @@ const DEFAULT_SETTINGS = {
   units: { temp: 'C', wind: 'kmh' }, // temp: C|F ; wind: kmh|mph|ms
   person: { cold: 'normal', profile: 'adult' }, // cold: cold|normal|warm ; profile: adult|kid|bike
   layout: { order: [], hidden: [] }, // customizable card order + hidden ids
+  ui: { alertsExpanded: false }, // remember if the warnings summary is opened
   lastPlaceId: null,
 };
 
@@ -30,6 +31,7 @@ export function loadSettings() {
     units: { ...DEFAULT_SETTINGS.units, ...(s.units || {}) },
     person: { ...DEFAULT_SETTINGS.person, ...(s.person || {}) },
     layout: { ...DEFAULT_SETTINGS.layout, ...(s.layout || {}) },
+    ui: { ...DEFAULT_SETTINGS.ui, ...(s.ui || {}) },
   };
 }
 export function saveSettings(s) { write(KEY_SETTINGS, s); }

@@ -521,6 +521,16 @@ function wireEvents() {
     if (e.target.closest('.fam-share')) shareFamily();
     else if (e.target.closest('.fam-add-btn')) openSearch();
   });
+  $('#alerts').addEventListener('click', (e) => {
+    const bar = e.target.closest('.alert-group-bar');
+    if (!bar) return;
+    const wasOpen = bar.getAttribute('aria-expanded') === 'true';
+    bar.setAttribute('aria-expanded', String(!wasOpen));
+    const list = bar.parentElement.querySelector('.alert-list');
+    if (list) list.hidden = wasOpen;
+    settings.ui = { ...(settings.ui || {}), alertsExpanded: !wasOpen };
+    saveSettings(settings);
+  });
   $('#sunmoon').addEventListener('click', (e) => {
     const b = e.target.closest('.ics-btn');
     if (b) downloadICS(b.dataset.start, b.dataset.end, b.dataset.title);
