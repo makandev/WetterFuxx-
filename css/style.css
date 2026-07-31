@@ -722,6 +722,8 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .vi-lead { font-size: 13.5px; color: var(--text-dim); line-height: 1.5; margin: 0 0 14px; }
 .vi-count { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 0 16px; }
 .vi-num { font-size: 46px; font-weight: 800; letter-spacing: -0.02em; }
+.vi-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; padding: 6px 14px; background: #fff; border-radius: 12px; }
+.vi-badge img { max-width: 220px; height: auto; display: block; }
 .vi-lbl { font-size: 13px; color: var(--text-dim); }
 .vi-note { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin: 6px 0 12px; }
 .vi-setup { font-size: 14px; line-height: 1.55; }

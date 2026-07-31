@@ -13,7 +13,7 @@ import {
   bumpStreak, getStreak, openedOn,
 } from './store.js';
 import { buildShareBlob, buildFamilyBlob, SHARE_BUILDERS } from './sharecard.js';
-import { initAnalytics, fetchVisitorTotal, dashboardURL, isConfigured } from './analytics.js';
+import { initAnalytics, fetchVisitorTotal, dashboardURL, isConfigured, counterImgURL } from './analytics.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -444,16 +444,36 @@ async function renderVisitors() {
     return;
   }
 
-  body.innerHTML = `<p class="vi-lead">${privacy}</p><div class="vi-count"><span class="vi-num">…</span><span class="vi-lbl">${en ? 'visits total' : 'Besuche gesamt'}</span></div>`;
-  const total = await fetchVisitorTotal();
+  const lbl = en ? 'visits total' : 'Besuche gesamt';
   const url = dashboardURL();
-  body.innerHTML = `
-    <p class="vi-lead">${privacy}</p>
-    <div class="vi-count"><span class="vi-num">${total != null ? escapeHtml(total) : '—'}</span><span class="vi-lbl">${en ? 'visits total' : 'Besuche gesamt'}</span></div>
-    <p class="vi-note">${en
-      ? 'For daily / weekly / monthly and countries, open your dashboard:'
-      : 'Für täglich / wöchentlich / monatlich und Länder öffne dein Dashboard:'}</p>
-    <a class="btn btn-block" href="${url}" target="_blank" rel="noopener">${en ? 'Open full statistics ↗' : 'Vollständige Statistik öffnen ↗'}</a>`;
+  const note = en
+    ? 'For daily / weekly / monthly and countries, open your dashboard:'
+    : 'Für täglich / wöchentlich / monatlich und Länder öffne dein Dashboard:';
+  const dashBtn = `<a class="btn btn-block" href="${url}" target="_blank" rel="noopener">${en ? 'Open full statistics ↗' : 'Vollständige Statistik öffnen ↗'}</a>`;
+
+  body.innerHTML = `<p class="vi-lead">${privacy}</p><div class="vi-count"><span class="vi-num">…</span><span class="vi-lbl">${lbl}</span></div>`;
+  // Prefer the JSON count (crisp, styled). If that's blocked (e.g. CORS), fall
+  // back to GoatCounter's official counter image, which loads without CORS.
+  const total = await fetchVisitorTotal();
+  const countHtml = total != null
+    ? `<div class="vi-count"><span class="vi-num">${escapeHtml(total)}</span><span class="vi-lbl">${lbl}</span></div>`
+    : `<div class="vi-count"><span class="vi-badge"><img alt="${lbl}" src="${counterImgURL()}"></span><span class="vi-lbl">${lbl}</span></div>`;
+  body.innerHTML = `<p class="vi-lead">${privacy}</p>${countHtml}<p class="vi-note">${note}</p>${dashBtn}`;
+
+  // If even the counter image fails to load, the public counter isn't enabled yet.
+  const img = body.querySelector('.vi-badge img');
+  if (img) {
+    img.addEventListener('error', () => {
+      const badge = body.querySelector('.vi-badge');
+      if (badge) badge.textContent = '—';
+      const hint = document.createElement('p');
+      hint.className = 'vi-note';
+      hint.innerHTML = en
+        ? 'The public count isn’t enabled yet. In GoatCounter → Settings, tick “Allow adding visitor counts on your website”, then reload.'
+        : 'Die öffentliche Zählung ist noch nicht aktiv. In GoatCounter → Settings den Haken „Allow adding visitor counts on your website" setzen, dann neu laden.';
+      body.insertBefore(hint, body.querySelector('.vi-note'));
+    });
+  }
 }
 function onSettingChange(e) {
   const key = e.target.dataset.set;
