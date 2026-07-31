@@ -14,6 +14,10 @@ export const GC_CODE = 'makandev';
 const base = () => `https://${GC_CODE}.goatcounter.com`;
 export const dashboardURL = () => (GC_CODE ? base() : null);
 export const isConfigured = () => !!GC_CODE;
+// GoatCounter's official visitor-counter image (total pageviews). Loads as an
+// <img>, so it works cross-origin without CORS — the most robust public display.
+// Requires "Allow adding visitor counts on your website" enabled in GoatCounter.
+export const counterImgURL = () => (GC_CODE ? `${base()}/counter/TOTAL.svg` : null);
 
 // Load the tiny counting script. Skips localhost so you don't count yourself.
 export function initAnalytics() {
