@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v28';
+const CACHE = 'wetterfux-v29';
 const SHELL = [
   './',
   './index.html',
@@ -66,11 +66,19 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Third-party requests (analytics, etc.) → straight to network, untouched.
+  // Never substitute the app shell for a cross-origin request — that returned
+  // index.html for the visitor-counter fetch/image and broke it.
+  if (url.origin !== location.origin) {
+    e.respondWith(fetch(req).catch(() => new Response('', { status: 504 })));
+    return;
+  }
+
   // App shell → stale-while-revalidate for same-origin (fresh after deploy)
   e.respondWith(
     caches.match(req).then((cached) => {
       const network = fetch(req).then((res) => {
-        if (res.ok && url.origin === location.origin) {
+        if (res.ok) {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put(req, copy));
         }
