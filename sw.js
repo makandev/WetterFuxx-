@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v29';
+const CACHE = 'wetterfux-v30';
 const SHELL = [
   './',
   './index.html',
@@ -29,7 +29,9 @@ const SHELL = [
 
 self.addEventListener('install', (e) => {
   // Cache each asset independently so one 404 can't fail the whole install.
-  // Do NOT skipWaiting here — the page asks the user first, then messages us.
+  // Activate the new version immediately so fixes reach users on the next load
+  // instead of getting stuck behind a still-running old service worker.
+  self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))));
 });
 
