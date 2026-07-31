@@ -469,8 +469,8 @@ async function renderVisitors() {
       const hint = document.createElement('p');
       hint.className = 'vi-note';
       hint.innerHTML = en
-        ? 'The public count isn’t enabled yet. In GoatCounter → Settings, tick “Allow adding visitor counts on your website”, then reload.'
-        : 'Die öffentliche Zählung ist noch nicht aktiv. In GoatCounter → Settings den Haken „Allow adding visitor counts on your website" setzen, dann neu laden.';
+        ? 'Couldn’t load the public count right now. If “Allow adding visitor counts” is enabled in GoatCounter, just reload in a moment.'
+        : 'Die öffentliche Zahl konnte gerade nicht geladen werden. Wenn in GoatCounter „…visitor counts on your website" aktiviert ist, einfach gleich neu laden.';
       body.insertBefore(hint, body.querySelector('.vi-note'));
     });
   }
