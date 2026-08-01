@@ -6,8 +6,8 @@
 
 import { describe, iconKey } from './weathercodes.js';
 import {
-  placeLabel, tempStr, formatHour, parseLocal, placeNowMs, setPlaceTz,
-  shortDate, dayLabel, isWeekend, num, windUnitLabel,
+  placeLabel, tempStr, formatHour, formatTime, parseLocal, placeNowMs, setPlaceTz,
+  shortDate, dayLabel, isWeekend, num, windUnitLabel, moonPhase, daylightStr,
 } from './format.js';
 import { t, getLang } from './i18n.js';
 import { buildClothingAdvice } from './advice.js';
@@ -504,6 +504,70 @@ export async function buildWeekendBlob(data) {
   return toBlob(cv);
 }
 
+// Sun & Moon — sunrise/sunset arc, day length, moon phase.
+export async function buildSunMoonBlob(data) {
+  const pal = prep(data);
+  const d = data.forecast.daily;
+  const en = getLang() === 'en';
+  const H = 1350;
+  const { cv, ctx } = createCard(H);
+  paintBg(ctx, pal, H);
+  ctx.textAlign = 'center';
+  header(ctx, { place: placeLabel(data.place), sub: en ? 'Sun & Moon' : 'Sonne & Mond' });
+
+  const sr = d.sunrise ? d.sunrise[0] : null, ss = d.sunset ? d.sunset[0] : null;
+  const srD = parseLocal(sr), ssD = parseLocal(ss);
+  const moon = moonPhase(new Date());
+
+  // Sun arc (upper semicircle from sunrise horizon to sunset horizon)
+  const cx = W / 2, cyB = 560, r = 300;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(255,255,255,0.26)'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(cx, cyB, r, Math.PI, 2 * Math.PI); ctx.stroke();
+  if (srD && ssD && ssD.getTime() > srD.getTime()) {
+    const now = placeNowMs();
+    const prog = Math.max(0, Math.min(1, (now - srD.getTime()) / (ssD.getTime() - srD.getTime())));
+    ctx.strokeStyle = ACCENT; ctx.lineWidth = 9;
+    ctx.beginPath(); ctx.arc(cx, cyB, r, Math.PI, Math.PI + Math.PI * prog); ctx.stroke();
+    const ang = Math.PI + Math.PI * prog;
+    const sxp = cx + Math.cos(ang) * r, syp = cyB + Math.sin(ang) * r;
+    ctx.shadowColor = 'rgba(255,200,110,0.8)'; ctx.shadowBlur = 26;
+    emoji(ctx, prog > 0 && prog < 1 ? '☀️' : '🌙', sxp, syp + 22, 64);
+    ctx.shadowBlur = 0;
+  }
+  ctx.restore();
+
+  // Sunrise / sunset under the arc ends
+  ctx.save(); shadowOn(ctx); ctx.textAlign = 'center';
+  const drawEnd = (x, e, lbl, time) => {
+    emoji(ctx, e, x, cyB + 74, 52);
+    ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = FONT(500, 32); ctx.fillText(lbl, x, cyB + 120);
+    ctx.fillStyle = '#fff'; ctx.font = FONT(700, 52); ctx.fillText(time, x, cyB + 174);
+  };
+  drawEnd(cx - r + 20, '🌅', en ? 'Sunrise' : 'Aufgang', srD ? formatTime(sr) : '—');
+  drawEnd(cx + r - 20, '🌇', en ? 'Sunset' : 'Untergang', ssD ? formatTime(ss) : '—');
+  // Day length in the centre of the arc
+  if (d.daylight_duration && d.daylight_duration[0] != null) {
+    ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = FONT(500, 34); ctx.fillText(en ? 'Daylight' : 'Tageslänge', cx, cyB - 150);
+    ctx.fillStyle = '#fff'; ctx.font = FONT(700, 60); ctx.fillText(daylightStr(d.daylight_duration[0]), cx, cyB - 88);
+  }
+  ctx.restore();
+
+  // Moon block
+  const my = 900, mw = W - 2 * PAD;
+  glass(ctx, PAD, my, mw, 250, 34);
+  emoji(ctx, moon.emoji, PAD + 130, my + 160, 130);
+  ctx.save(); shadowOn(ctx); ctx.textAlign = 'left';
+  ctx.fillStyle = '#fff'; ctx.font = FONT(600, 56); ctx.fillText(fit(ctx, moon.name, mw - 320), PAD + 250, my + 110);
+  ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = FONT(400, 40);
+  ctx.fillText(`${en ? 'Illumination' : 'Beleuchtung'} ${moon.illum}%`, PAD + 250, my + 172);
+  ctx.restore();
+
+  footer(ctx, H, shareURL(data.place));
+  return toBlob(cv);
+}
+
 // Back-compat: the header share button still imports buildShareBlob.
 export const buildShareBlob = buildCurrentBlob;
 
@@ -515,4 +579,5 @@ export const SHARE_BUILDERS = {
   daily: buildDailyBlob,
   weekend: buildWeekendBlob,
   clothing: buildClothingBlob,
+  sunmoon: buildSunMoonBlob,
 };
