@@ -202,9 +202,14 @@ function aiWeatherContext(data) {
 }
 
 function aiErrMsg(code, en) {
+  // Surface Google's actual message for anything we didn't specifically map.
+  if (code && code.indexOf('req:') === 0) {
+    const detail = code.slice(4).trim();
+    return (en ? 'Request rejected' : 'Anfrage abgelehnt') + (detail ? ` – Google: ${detail}` : '.');
+  }
   switch (code) {
     case 'network': return en ? 'No connection to Google — check your internet.' : 'Keine Verbindung zu Google – prüfe dein Internet.';
-    case 'bad-key': return en ? 'That key was rejected. Tap 🔑 to fix it in Google AI Studio.' : 'Der Schlüssel wurde abgelehnt. Tippe auf 🔑, um ihn in Google AI Studio zu prüfen.';
+    case 'bad-key': return en ? 'That key was rejected. Tap ⚙️ to check it in Google AI Studio.' : 'Der Schlüssel wurde abgelehnt. Tippe auf ⚙️, um ihn in Google AI Studio zu prüfen.';
     case 'quota': return en
       ? 'Gemini free limit reached (daily or live-search quota). Tip: open ⚙️ and turn off live web search, or pick another model — or try later.'
       : 'Gemini-Gratislimit erreicht (Tages- oder Live-Suche-Kontingent). Tipp: unter ⚙️ die Live-Websuche ausschalten oder ein anderes Modell wählen – oder später nochmal.';
