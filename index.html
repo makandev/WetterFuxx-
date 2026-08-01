@@ -242,6 +242,18 @@
     </div>
   </div>
 
+  <!-- Hourly 48h — big expandable view -->
+  <div id="hourlyOverlay" class="overlay hourly-overlay" role="dialog" aria-modal="true" aria-labelledby="hourlyBigTitle">
+    <div class="overlay-card hourly-card">
+      <div class="settings-head">
+        <h2>🕐 <span id="hourlyBigTitle">Stündlich · 48 Stunden</span></h2>
+        <button id="hourlyClose" class="icon-btn" aria-label="Schließen">✕</button>
+      </div>
+      <div class="hr-legend-big" aria-hidden="true">🌡️ <i class="lg-line"></i> Temp. · 💧 <i class="lg-bar"></i> Regen</div>
+      <div id="hourlyBig" class="hourly-big-body"></div>
+    </div>
+  </div>
+
   <!-- Welt-Wetter: live natural events worldwide (NASA EONET + USGS) -->
   <div id="worldOverlay" class="overlay world-overlay" role="dialog" aria-modal="true" aria-labelledby="worldHeadTitle">
     <div class="overlay-card world-card">
