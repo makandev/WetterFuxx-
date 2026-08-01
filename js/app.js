@@ -220,25 +220,54 @@ function refresh() {
   if (currentPlace) selectPlace(currentPlace, false);
 }
 
-// ---- Geolocation -------------------------------------------------------------
-function tryGeolocation() {
-  showLoading();
-  if (!navigator.geolocation) return fallbackDefault();
+// ---- Geolocation (opt-in, on demand) ----------------------------------------
+let locating = false;
+async function tryGeolocation() {
+  if (locating) return;
+  if (!navigator.geolocation) { toast(t('errLocUnsupported')); return; }
+  if (!window.isSecureContext) { toast(t('errLocInsecure')); return; }
+  // If access was already refused, say so instead of prompting into the void.
+  if (navigator.permissions && navigator.permissions.query) {
+    try {
+      const st = await navigator.permissions.query({ name: 'geolocation' });
+      if (st.state === 'denied') { toast(t('errLocDenied')); return; }
+    } catch { /* Permissions API not available — just try */ }
+  }
+
+  locating = true;
+  const btn = $('#btnLocate');
+  if (btn) { btn.classList.add('locating'); btn.disabled = true; }
+  toast(t('locating'));
+
+  const done = () => { locating = false; if (btn) { btn.classList.remove('locating'); btn.disabled = false; } };
+
   navigator.geolocation.getCurrentPosition(
     async (pos) => {
-      const { latitude, longitude } = pos.coords;
-      const place = await reversePlace(latitude, longitude, getLang());
-      selectPlace(place, false);
+      try {
+        const { latitude, longitude } = pos.coords;
+        const place = await reversePlace(latitude, longitude, getLang());
+        addPlace(place);          // save it so it sticks as a chip
+        renderSavedChips();
+        await selectPlace(place); // show the weather there
+      } catch { showError(t('errGeneric')); }
+      done();
     },
-    () => fallbackDefault(),
-    { enableHighAccuracy: false, timeout: 8000, maximumAge: 600000 },
+    (err) => {
+      done();
+      const c = err && err.code;
+      const msg = c === 1 ? t('errLocDenied')
+        : c === 3 ? t('errLocTimeout')
+        : c === 2 ? t('errLocUnavailable')
+        : t('errLocation');
+      toast(msg);
+      // Never silently jump to a default. Only help along if nothing is shown yet.
+      if (!currentPlace) {
+        const saved = loadPlaces()[0];
+        if (saved) selectPlace(saved, false); else { hideWelcome(); openSearch(); }
+      }
+    },
+    { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 },
   );
-}
-function fallbackDefault() {
-  const saved = loadPlaces()[0];
-  if (saved) return selectPlace(saved, false);
-  selectPlace({ id: 'default:berlin', name: 'Berlin', admin1: 'Berlin', country: 'Deutschland',
-    country_code: 'DE', lat: 52.52, lon: 13.405, tz: 'Europe/Berlin' }, false);
 }
 
 // ---- Search overlay ----------------------------------------------------------
