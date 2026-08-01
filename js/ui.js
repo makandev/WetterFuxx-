@@ -70,44 +70,143 @@ function renderHero(data, s) {
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
 }
 
-// ---- Quick answers ("Frag Wetterfux") ---------------------------------------
+// ---- "Frag den Fuchs" — the app answers free-typed questions, offline --------
+// Maps a natural question to an intent, then answers with a verdict + best time
+// window + a short reason, reusing the existing scoring engine. No server, no AI
+// service — pure on-device keyword intent matching. This is the differentiator:
+// a weather app you can actually *ask*.
+const FOX_INTENTS = [
+  { key: 'run', emoji: '🏃', de: 'Joggen', en: 'Jogging', kw: ['jogg', 'joggen', 'laufen', 'rennen', 'lauf', 'run', 'jog'], fn: sportScore, type: 'window' },
+  { key: 'walk', emoji: '🚶', de: 'Spazieren', en: 'A walk', kw: ['spazier', 'gassi', 'walk', 'rausgeh', 'draußen', 'spaziergang', 'hund'], fn: outdoorScore, type: 'window' },
+  { key: 'bike', emoji: '🚴', de: 'Radfahren', en: 'Cycling', kw: ['rad', 'fahrrad', 'bike', 'cycl', 'velo', 'radel'], fn: bikeScore, type: 'window' },
+  { key: 'grill', emoji: '🔥', de: 'Grillen', en: 'Barbecue', kw: ['grill', 'bbq', 'barbec'], fn: grillScore, type: 'window' },
+  { key: 'swim', emoji: '🏊', de: 'Baden', en: 'Swimming', kw: ['bad', 'schwimm', 'swim', 'freibad', 'see'], fn: swimScore, type: 'window' },
+  { key: 'garden', emoji: '🌱', de: 'Garten', en: 'Gardening', kw: ['garten', 'garden', 'pflanz', 'beet', 'rasen'], fn: gardenScore, type: 'window' },
+  { key: 'photo', emoji: '📸', de: 'Fotografieren', en: 'Photos', kw: ['foto', 'photo', 'bild', 'kamera'], fn: photoScore, type: 'window' },
+  { key: 'laundry', emoji: '🧺', de: 'Wäsche trocknen', en: 'Drying laundry', kw: ['wäsche', 'waschen', 'trocknen', 'laundry', 'washing', 'leine', 'aufhäng'], fn: laundryScore, type: 'window' },
+  { key: 'air', emoji: '🪟', de: 'Lüften', en: 'Airing out', kw: ['lüft', 'lueft', 'fenster', 'durchzug', 'air out', 'ventilat'], fn: airOutScore, type: 'window' },
+  { key: 'umbrella', emoji: '☂️', de: 'Schirm', en: 'Umbrella', kw: ['schirm', 'regen', 'umbrella', 'rain', 'nass', 'regnet'], type: 'umbrella' },
+  { key: 'jacket', emoji: '🧥', de: 'Jacke', en: 'Jacket', kw: ['jacke', 'jacket', 'kalt', 'frier', 'coat', 'warm anzieh'], type: 'jacket' },
+  { key: 'frost', emoji: '❄️', de: 'Frost / Auto kratzen', en: 'Frost / scrape car', kw: ['frost', 'kratzen', 'auto', 'scheibe', 'glätte', 'scrape', 'eis'], type: 'frost' },
+  { key: 'sun', emoji: '🧴', de: 'Sonnencreme', en: 'Sunscreen', kw: ['creme', 'sonnencreme', 'sunscreen', 'sonnenschutz', 'eincrem'], type: 'sun' },
+];
+
+function foxWinTxt(win, tomorrow, en) {
+  if (!win) return '';
+  if (win.allDay) return en ? 'basically all day' : 'praktisch ganztags';
+  const pre = tomorrow ? (en ? 'tomorrow ' : 'morgen ') : '';
+  return `${pre}${win.from}–${win.to}${en ? '' : ' Uhr'}`;
+}
+
+// Returns { emoji, label, verdict:'good'|'ok'|'bad'|'info', dot, text }
+function answerFox(q, data, s) {
+  const en = getLang() === 'en';
+  const norm = ' ' + (q || '').toLowerCase().trim() + ' ';
+  let best = null, hits = 0;
+  for (const it of FOX_INTENTS) {
+    const n = it.kw.reduce((a, k) => a + (norm.includes(k) ? 1 : 0), 0);
+    if (n > hits) { hits = n; best = it; }
+  }
+  const DOT = { good: '🟢', ok: '🟡', bad: '🔴', info: '🔵' };
+  const out = (it, verdict, text) => ({ emoji: it ? it.emoji : '🦊', label: it ? (en ? it.en : it.de) : '', verdict, dot: DOT[verdict], text });
+  if (!best) {
+    return { emoji: '🦊', label: '', verdict: 'info', dot: '🔵',
+      text: en ? "I didn't quite get that — try “jogging?”, “laundry?”, “barbecue?” or “umbrella?”."
+        : 'Das habe ich nicht ganz verstanden – frag z. B. „joggen?", „Wäsche?", „grillen?" oder „Schirm?".' };
+  }
+  const u = s.units;
+
+  if (best.type === 'window') {
+    const { hours, tomorrow } = pickActivityDay(data.forecast.hourly, u);
+    if (hours.length < 2) return out(best, 'info', en ? 'No hourly data for that right now.' : 'Dazu habe ich gerade keine Stundendaten.');
+    const peak = Math.max(...hours.map(best.fn));
+    const verdict = peak >= 68 ? 'good' : peak >= 45 ? 'ok' : 'bad';
+    const win = verdict === 'bad' ? null : bestWindow(hours, best.fn);
+    const wt = foxWinTxt(win, tomorrow, en);
+    if (verdict === 'good') return out(best, 'good', wt ? (en ? `yes, great — best ${wt}.` : `ja, top – am besten ${wt}.`) : (en ? 'yes, great today.' : 'ja, top heute.'));
+    if (verdict === 'ok') return out(best, 'ok', wt ? (en ? `works — best ${wt}.` : `geht – am besten ${wt}.`) : (en ? 'okay-ish today.' : 'geht so heute.'));
+    const wet = hours.some((x) => x.prob >= 50 || x.precip > 0.2);
+    const cold = Math.max(...hours.map((x) => x.feels)) < 8;
+    return out(best, 'bad', wet ? (en ? 'better not — too wet today.' : 'heute eher nicht – zu nass.')
+      : cold ? (en ? 'better not — too cold today.' : 'heute eher nicht – zu kalt.')
+        : (en ? "better not — conditions don't fit." : 'heute eher nicht – die Bedingungen passen nicht.'));
+  }
+
+  const d = data.forecast.daily;
+  if (best.type === 'umbrella') {
+    const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
+    const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
+    const psum = toMmU(d.precipitation_sum ? (d.precipitation_sum[0] || 0) : 0, precipUnit);
+    const need = (pop >= 50 && psum >= 0.5) || psum >= 2;
+    return need
+      ? out(best, 'info', en ? `yes, take one — ${Math.round(pop)}% chance of rain.` : `ja, nimm einen mit – ${Math.round(pop)}% Regenchance.`)
+      : out(best, 'good', en ? 'no need — it stays dry.' : 'nein, bleibt trocken.');
+  }
+  if (best.type === 'jacket') {
+    const feels = toC(data.forecast.current.apparent_temperature, u.temp);
+    return feels < 14
+      ? out(best, 'info', en ? `yes — it feels like ${Math.round(data.forecast.current.apparent_temperature)}°.` : `ja – gefühlt ${Math.round(data.forecast.current.apparent_temperature)}°.`)
+      : out(best, 'good', en ? 'not needed — mild enough.' : 'nicht nötig – mild genug.');
+  }
+  if (best.type === 'frost') {
+    const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 4 && x.hour <= 8);
+    const tmin = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) : null;
+    if (tmin == null) return out(best, 'info', en ? 'no early-morning data yet.' : 'noch keine Werte für früh morgens.');
+    return tmin <= 0
+      ? out(best, 'info', en ? `yes — around ${Math.round(tmin)}° early, expect frost.` : `ja – früh um ${Math.round(tmin)}°, mit Frost rechnen.`)
+      : out(best, 'good', en ? 'no frost expected early.' : 'kein Frost zu erwarten.');
+  }
+  if (best.type === 'sun') {
+    const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
+    return uv >= 3
+      ? out(best, 'info', en ? `yes — UV up to ${Math.round(uv)} today.` : `ja – UV bis ${Math.round(uv)} heute.`)
+      : out(best, 'good', en ? 'not really needed today.' : 'heute kaum nötig.');
+  }
+  return out(best, 'info', '—');
+}
+
+// "Air out" window: dry, cool and not too humid (any hour, morning/evening win)
+function airOutScore(x) {
+  if (x.precip > 0.1 || x.prob >= 50) return 0;
+  let s = 100;
+  s -= Math.max(0, x.feels - 16) * 2.4;
+  s -= Math.max(0, x.hum - 70) * 1.3;
+  return s;
+}
+
 function renderAsk(data, s) {
   const box = $('#ask');
   const en = getLang() === 'en';
-  const u = s.units;
-  const c = data.forecast.current;
-  const d = data.forecast.daily;
-  const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
-  const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
-  const psum = toMmU(d.precipitation_sum ? (d.precipitation_sum[0] || 0) : 0, precipUnit);
-  const RAIN = [51, 53, 55, 61, 63, 65, 80, 81, 82];
-  const umbrella = (pop >= 50 && psum >= 0.5) || psum >= 2 || RAIN.includes(c.weather_code) || RAIN.includes(d.weather_code[0]);
-  const jacket = toC(c.apparent_temperature, u.temp) < 14;
-  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
-  const cream = uv >= 3;
-  const tmax = toC(d.temperature_2m_max[0], u.temp);
-  // frost potential for tomorrow morning (5–8h) → only then is "scrape" relevant
-  const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 5 && x.hour <= 8);
-  const tomAmMin = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) : null;
-  const frostRelevant = tomAmMin != null && tomAmMin <= 3; // cold season only
-  const warm = tmax >= 24;
-
-  // Always: umbrella + jacket. Then fill with seasonal/contextual answers.
-  const pills = [
-    { e: '☂️', q: en ? 'Umbrella?' : 'Schirm?', a: umbrella },
-    { e: '🧥', q: en ? 'Jacket?' : 'Jacke?', a: jacket },
+  const mascot = buildClothingAdvice(data, s).mascot;
+  const chips = [
+    { de: 'Joggen?', en: 'Jogging?' }, { de: 'Wäsche raushängen?', en: 'Hang out laundry?' },
+    { de: 'Spazieren?', en: 'A walk?' }, { de: 'Grillen?', en: 'Barbecue?' },
   ];
-  if (frostRelevant) pills.push({ e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: tomAmMin <= 0 });
-  if (warm) pills.push({ e: '🏊', q: en ? 'Swim?' : 'Baden?', a: tmax >= 27 && pop < 40 });
-  if (cream) pills.push({ e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: true });
-  if (warm && pills.length < 4) pills.push({ e: '🍦', q: en ? 'Ice cream?' : 'Eiswetter?', a: tmax >= 25 });
-  if (!frostRelevant && !warm && pills.length < 4) pills.push({ e: '😎', q: en ? 'Sunglasses?' : 'Sonnenbrille?', a: uv >= 3 });
-  const shown = pills.slice(0, 4);
   box.hidden = false;
-  box.innerHTML = `<div class="card-title">🦊 ${en ? 'Ask Wetterfux' : 'Frag Wetterfux'}</div>
-    <div class="ask-row">${shown.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
-      <span class="ask-e" aria-hidden="true">${p.e}</span><span class="ask-q">${p.q}</span>
-      <b>${p.a ? (en ? 'Yes' : 'Ja') : (en ? 'No' : 'Nein')}</b></div>`).join('')}</div>`;
+  box.innerHTML = `
+    <div class="card-title">🦊 ${en ? 'Ask the fox' : 'Frag den Fuchs'}</div>
+    <div class="fox-chat">
+      <div class="fox-ava" aria-hidden="true">${foxSVG(mascot)}</div>
+      <div class="fox-bubble" id="foxBubble">${en ? 'Ask me if something’s worth it — like “hang out laundry?” or “can I jog today?”.' : 'Frag mich, ob sich was lohnt – z. B. „Wäsche raushängen?" oder „Kann ich heute joggen?".'}</div>
+    </div>
+    <div class="fox-inputrow">
+      <input id="foxQ" type="text" autocomplete="off" aria-label="${en ? 'Ask the fox' : 'Frag den Fuchs'}" placeholder="${en ? 'e.g. Can I jog today?' : 'z. B. Kann ich heute joggen?'}" />
+      <button id="foxAsk" aria-label="${en ? 'Ask' : 'Fragen'}">➤</button>
+    </div>
+    <div class="fox-chips">${chips.map((c) => `<button class="fox-chip">${en ? c.en : c.de}</button>`).join('')}</div>`;
+
+  const inp = box.querySelector('#foxQ');
+  const bubble = box.querySelector('#foxBubble');
+  const ask = (q) => {
+    const question = (q != null ? q : inp.value).trim();
+    if (!question) return;
+    const a = answerFox(question, data, s);
+    bubble.className = 'fox-bubble v-' + a.verdict;
+    bubble.innerHTML = `${a.dot} ${a.label ? `<b>${escapeHtml(a.label)}:</b> ` : ''}${escapeHtml(a.text)}`;
+  };
+  box.querySelector('#foxAsk').addEventListener('click', () => ask());
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
+  box.querySelectorAll('.fox-chip').forEach((c) => c.addEventListener('click', () => { inp.value = c.textContent; ask(c.textContent); }));
 }
 
 // ---- Weather moment of the day ----------------------------------------------
