@@ -6,7 +6,7 @@ und taucht **nie** im öffentlichen App-Code auf.
 
 ## Einrichten (≈ 5 Minuten, kostenlos)
 
-1. **Neuen Schlüssel holen** (der alte, den du geteilt hast, ist verbrannt):
+1. **Neuen Schlüssel holen**:
    [Google AI Studio → API key](https://aistudio.google.com/apikey). Er beginnt mit `AIza…`.
 2. **Cloudflare-Konto** (gratis) → **Workers & Pages → Create Worker**.
 3. Den kompletten Inhalt von [`gemini-proxy.js`](./gemini-proxy.js) als Worker-Code
