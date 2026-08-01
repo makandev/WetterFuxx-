@@ -32,13 +32,16 @@ export const AI_MODELS = [
   { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite (sparsam)' },
   { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
 ];
-const CFG_DEFAULT = { model: 'gemini-2.0-flash', grounding: true };
+// Live web search (grounding) defaults OFF: it needs a paid/enabled tier and
+// otherwise makes every request fail. Users can switch it on in ⚙️ (with an
+// automatic fall-back to a plain answer if their key can't do it).
+const CFG_DEFAULT = { model: 'gemini-2.0-flash', grounding: false };
 export function loadAICfg() {
   try {
     const c = JSON.parse(localStorage.getItem(CFG_STORE) || '{}');
     return {
       model: AI_MODELS.some((m) => m.id === c.model) ? c.model : CFG_DEFAULT.model,
-      grounding: c.grounding !== false,
+      grounding: c.grounding === true, // off unless the user explicitly enabled it
     };
   } catch { return { ...CFG_DEFAULT }; }
 }
@@ -196,13 +199,27 @@ export async function askFuxxAI({ question, context = '', history = [], lang = '
     return res;
   };
 
+  const isKeyError = (t) => /API key not valid|API_KEY_INVALID|PERMISSION_DENIED|permission/i.test(t || '');
+  const reasonOf = (t) => { try { return (JSON.parse(t).error || {}).message || ''; } catch { return (t || '').slice(0, 160); } };
+
   const wantSearch = cfg.grounding;
   let res = await call(wantSearch);
-  if (res.status === 429 && wantSearch) res = await call(false); // retry ungrounded
 
-  if (res.status === 400 || res.status === 403) throw new Error('bad-key');
+  // A grounded call can fail with 400 (live search not available for this
+  // key/tier) or 429 (its small quota). Unless it's a real key problem, retry
+  // once WITHOUT search so a valid key still gets a plain answer.
+  let errText = null;
+  if (!res.ok && wantSearch) {
+    errText = await res.text().catch(() => '');
+    if (!isKeyError(errText)) { res = await call(false); errText = null; }
+  }
+
   if (res.status === 429) throw new Error('quota');
-  if (!res.ok) throw new Error('http-' + res.status);
+  if (!res.ok) {
+    const t = errText != null ? errText : await res.text().catch(() => '');
+    if (res.status === 401 || res.status === 403 || isKeyError(t)) throw new Error('bad-key');
+    throw new Error('req:' + reasonOf(t)); // surface Google's actual message
+  }
 
   const json = await res.json().catch(() => null);
   const cand = json && json.candidates && json.candidates[0];
