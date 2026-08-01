@@ -6,7 +6,7 @@ import { skyGroup } from './weathercodes.js';
 import { placeLabel } from './format.js';
 import { initEffects, setScene } from './effects.js';
 import { invalidateRadar } from './radar.js';
-import { renderAll, renderFamily, renderCompare, escapeHtml } from './ui.js';
+import { renderAll, renderFamily, renderCompare, escapeHtml, renderHourlyBig } from './ui.js';
 import {
   loadSettings, saveSettings, loadPlaces, addPlace, removePlace, isSaved,
   placeFromParams, shareURL, samePlace, familyURL, familyFromParams, importPlaces,
@@ -590,6 +590,12 @@ function wireEvents() {
     const b = e.target.closest('[data-share]');
     if (b) { e.stopPropagation(); shareView(b.dataset.share); }
   });
+  // Expand the 48h hourly chart into a big popup (delegated ⤢ button).
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-hr-expand]')) { e.stopPropagation(); openHourly(); }
+  });
+  $('#hourlyClose').addEventListener('click', closeHourly);
+  $('#hourlyOverlay').addEventListener('click', (e) => { if (e.target.id === 'hourlyOverlay') closeHourly(); });
   $('#family').addEventListener('click', (e) => {
     if (e.target.closest('.fam-share')) shareFamily();
     else if (e.target.closest('.fam-add-btn')) openSearch();
@@ -622,7 +628,7 @@ function wireEvents() {
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); closeInstallHelp(); closeWorld(); }
+    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); closeInstallHelp(); closeWorld(); closeHourly(); }
     if (e.key === '/' && !isTyping()) { e.preventDefault(); openSearch(); }
   });
   document.addEventListener('visibilitychange', () => {
@@ -632,6 +638,25 @@ function wireEvents() {
 function isTyping() {
   const a = document.activeElement;
   return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+}
+
+// ---- Hourly 48h — big expandable popup --------------------------------------
+let hourlyLastFocus = null;
+function openHourly() {
+  if (!currentData) return;
+  hourlyLastFocus = document.activeElement;
+  $('#hourlyBigTitle').textContent = t('hourly');
+  const en = getLang() === 'en';
+  const leg = $('.hr-legend-big');
+  if (leg) leg.innerHTML = `🌡️ <i class="lg-line"></i> ${en ? 'temp' : 'Temp.'} · 💧 <i class="lg-bar"></i> ${t('precipProb')}`;
+  renderHourlyBig(currentData, settings);
+  $('#hourlyOverlay').classList.add('open');
+  const c = $('#hourlyClose');
+  if (c) setTimeout(() => c.focus(), 40);
+}
+function closeHourly() {
+  $('#hourlyOverlay').classList.remove('open');
+  if (hourlyLastFocus && hourlyLastFocus.focus) { hourlyLastFocus.focus(); hourlyLastFocus = null; }
 }
 
 // Local context the Welt-Wetter "Betrifft uns?" banner uses (sunset + rain soon)
