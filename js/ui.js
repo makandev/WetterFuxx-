@@ -137,6 +137,50 @@ let aiHistory = loadChat(); // restored from this device so the chat persists
 let aiBusy = false;
 let aiError = '';
 let aiDraft = ''; // a failed question, put back into the box so it isn't lost
+let aiView = 'chat'; // 'chat' (live conversation) | 'themen' (grouped history)
+
+// Pair the flat history into question→answer entries (for the topic view).
+function aiPairs() {
+  const pairs = [];
+  for (let i = 0; i < aiHistory.length; i++) {
+    if (aiHistory[i].role === 'user' && aiHistory[i + 1] && aiHistory[i + 1].role === 'ai') {
+      const a = aiHistory[i + 1];
+      pairs.push({ q: aiHistory[i].text, a: a.text, sources: a.sources, topic: a.topic || '' });
+      i++;
+    }
+  }
+  return pairs;
+}
+// A one-line summary for the collapsed row: first sentence, capped.
+function aiTLDR(text) {
+  const clean = (text || '').replace(/\*\*/g, '').replace(/\s+/g, ' ').trim();
+  const m = clean.match(/^.*?[.!?](\s|$)/);
+  let out = m ? m[0].trim() : clean;
+  if (out.length > 96) out = out.slice(0, 94).trim() + '…';
+  return out;
+}
+// B3: the history grouped by topic — a growing "knowledge log".
+function aiThemenHTML(en) {
+  const pairs = aiPairs();
+  if (!pairs.length) return `<p class="ai-empty">${en ? 'Your questions collect here by topic.' : 'Hier sammeln sich deine Fragen nach Thema.'}</p>`;
+  const groups = new Map();
+  for (const p of pairs) {
+    const key = p.topic || (en ? 'General' : 'Allgemein');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(p);
+  }
+  let html = '';
+  for (const [topic, items] of groups) {
+    html += `<div class="grp-head"><span>${escapeHtml(topic)}</span><span class="cnt">${items.length}</span></div>`;
+    for (const p of items) {
+      html += `<details class="qa"><summary>
+        <span class="sum-main"><span class="sum-q">${escapeHtml(p.q)}</span><span class="sum-tl">${escapeHtml(aiTLDR(p.a))}</span></span>
+        <span class="chev" aria-hidden="true">▶</span></summary>
+        <div class="qa-body">${aiFormat(p.a)}${aiSourcesHTML(p.sources, en)}</div></details>`;
+    }
+  }
+  return html;
+}
 
 // Compact, factual snapshot of the app's own numbers — handed to the model so
 // it answers forecast questions from real data instead of inventing them.
@@ -215,16 +259,29 @@ function renderAskAI(data, s) {
     : '';
   const errHTML = aiError ? `<div class="ai-err">${escapeHtml(aiErrMsg(aiError, en))}</div>` : '';
   const empty = `<p class="ai-empty">${en ? 'Ask me anything about the world outside 🌍' : 'Frag mich alles über die Welt da draußen 🌍'}</p>`;
-  box.innerHTML = `
-    <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
-      ${aiHistory.length ? `<button class="ai-new-btn" aria-label="${en ? 'New conversation' : 'Neues Gespräch'}" title="${en ? 'New conversation' : 'Neues Gespräch'}">🗑️</button>` : ''}
-      <button class="ai-key-btn" aria-label="${en ? 'API key settings' : 'Schlüssel-Einstellungen'}" title="${en ? 'API key' : 'Schlüssel'}">🔑</button></div>
+  const chatPanel = `
     <div class="ai-thread" id="aiThread">${(msgs || empty) + thinking + errHTML}</div>
     <div class="fox-inputrow">
       <input id="aiQ" type="text" autocomplete="off" ${aiBusy ? 'disabled' : ''} aria-label="${en ? 'Ask the AI' : 'Die KI fragen'}" placeholder="${en ? 'e.g. Why is the sky blue?' : 'z. B. Warum ist der Himmel blau?'}" />
       <button id="aiAsk" ${aiBusy ? 'disabled' : ''} aria-label="${en ? 'Ask' : 'Fragen'}">➤</button>
     </div>
     ${aiHistory.length ? '' : `<div class="fox-chips">${examples.map((x) => `<button class="ai-chip">${escapeHtml(x)}</button>`).join('')}</div>`}`;
+  const themenPanel = `<div class="ai-themen">${aiThemenHTML(en)}</div>`;
+
+  box.innerHTML = `
+    <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
+      ${aiHistory.length ? `<button class="ai-new-btn" aria-label="${en ? 'New conversation' : 'Neues Gespräch'}" title="${en ? 'New conversation' : 'Neues Gespräch'}">🗑️</button>` : ''}
+      <button class="ai-key-btn" aria-label="${en ? 'API key settings' : 'Schlüssel-Einstellungen'}" title="${en ? 'API key' : 'Schlüssel'}">🔑</button></div>
+    <div class="ai-seg" role="tablist">
+      <button class="ai-seg-btn ${aiView === 'chat' ? 'on' : ''}" data-view="chat">💬 Chat</button>
+      <button class="ai-seg-btn ${aiView === 'themen' ? 'on' : ''}" data-view="themen">📚 ${en ? 'Topics' : 'Themen'}</button>
+    </div>
+    ${aiView === 'chat' ? chatPanel : themenPanel}`;
+
+  box.querySelectorAll('.ai-seg-btn').forEach((b) => b.addEventListener('click', () => {
+    const v = b.dataset.view;
+    if (v !== aiView) { aiView = v; renderAskAI(data, s); }
+  }));
 
   const thread = box.querySelector('#aiThread');
   if (thread) thread.scrollTop = thread.scrollHeight;
@@ -258,7 +315,8 @@ function renderAskAI(data, s) {
     }
   };
 
-  box.querySelector('#aiAsk').addEventListener('click', () => send());
+  const askBtn = box.querySelector('#aiAsk');
+  if (askBtn) askBtn.addEventListener('click', () => send());
   if (inp) {
     if (aiDraft && !aiBusy) { inp.value = aiDraft; aiDraft = ''; }
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
@@ -268,11 +326,11 @@ function renderAskAI(data, s) {
   const newBtn = box.querySelector('.ai-new-btn');
   if (newBtn) newBtn.addEventListener('click', () => {
     const msg = en ? 'Start a new conversation? This clears the current chat.' : 'Neues Gespräch starten? Der aktuelle Chat wird gelöscht.';
-    if (window.confirm(msg)) { aiHistory = []; aiError = ''; clearChat(); renderAskAI(data, s); }
+    if (window.confirm(msg)) { aiHistory = []; aiError = ''; aiView = 'chat'; clearChat(); renderAskAI(data, s); }
   });
   box.querySelector('.ai-key-btn').addEventListener('click', () => {
     const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
-    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; clearChat(); renderAskAI(data, s); }
+    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; aiView = 'chat'; clearChat(); renderAskAI(data, s); }
   });
 }
 
