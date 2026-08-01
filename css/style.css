@@ -196,6 +196,9 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 }
 .icon-btn:hover { background: rgba(255,255,255,0.24); }
 .icon-btn:active { transform: scale(0.92); }
+.icon-btn.locating { animation: locpulse 1s ease-in-out infinite; }
+.icon-btn:disabled { cursor: default; }
+@keyframes locpulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(1.12); } }
 .icon-btn.star { width: 34px; height: 34px; font-size: 20px; border: none; background: transparent; color: var(--text-dim); }
 .icon-btn.star.on { color: var(--accent); text-shadow: 0 0 12px rgba(255,212,121,.7); }
 
