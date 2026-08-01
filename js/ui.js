@@ -6,7 +6,7 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
-import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat, AI_MODELS, loadAICfg, saveAICfg } from './ai.js';
+import { hasAIKey, hasAI, AI_PROXY, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat, AI_MODELS, loadAICfg, saveAICfg } from './ai.js';
 import {
   loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
   loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
@@ -231,8 +231,8 @@ function renderAskAI(data, s) {
   const en = getLang() === 'en';
   box.hidden = false;
 
-  // --- Setup state: no key yet → invite + privacy note + key field ---
-  if (!hasAIKey()) {
+  // --- Setup state: no shared proxy AND no own key → invite + key field ---
+  if (!hasAI()) {
     box.innerHTML = `
       <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span></div>
       <p class="ai-intro">${en ? 'Ask anything about weather, nature and the universe. Answers come from Google Gemini with live web sources.' : 'Frag alles über Wetter, Natur und das Universum. Die Antworten kommen von Google Gemini – mit echten Web-Quellen.'}</p>
@@ -271,6 +271,15 @@ function renderAskAI(data, s) {
     ${aiHistory.length ? '' : `<div class="fox-chips">${examples.map((x) => `<button class="ai-chip">${escapeHtml(x)}</button>`).join('')}</div>`}`;
   const themenPanel = `<div class="ai-themen">${aiThemenHTML(en)}</div>`;
   const cfg = loadAICfg();
+  // Key management differs by mode: own key → remove button; shared proxy & no
+  // own key → note + optional "use my own key" field.
+  const keyBlock = hasAIKey()
+    ? `<button id="aiKeyRemove" class="ai-cfg-remove">${en ? 'Remove my API key' : 'Eigenen Schlüssel entfernen'}</button>`
+    : (AI_PROXY ? `
+      <p class="ai-cfg-hint">🤝 ${en ? 'Shared access is on — no key needed. Questions go to Google via a proxy.' : 'Gemeinsamer Zugang aktiv – kein eigener Schlüssel nötig. Fragen gehen über einen Proxy an Google.'}</p>
+      <details class="ai-ownkey"><summary>${en ? 'Use my own key (optional)' : 'Eigenen Schlüssel nutzen (optional)'}</summary>
+        <div class="ai-setup"><input id="aiKey" type="password" autocomplete="off" placeholder="${en ? 'Paste your free Gemini key' : 'Eigenen Gemini-Schlüssel einfügen'}" /><button id="aiSave">${en ? 'Save' : 'Speichern'}</button></div>
+      </details>` : '');
   const cfgPanel = aiCfgOpen ? `
     <div class="ai-cfg">
       <label class="ai-cfg-row"><span>${en ? 'Model' : 'Modell'}</span>
@@ -278,7 +287,7 @@ function renderAskAI(data, s) {
       <label class="ai-cfg-row"><span>${en ? 'Live web search (sources)' : 'Live-Websuche (Quellen)'}</span>
         <input type="checkbox" id="aiGround" ${cfg.grounding ? 'checked' : ''}></label>
       <p class="ai-cfg-hint">${en ? 'Live search adds sources but has a small free daily limit. Turn it off if you hit “limit reached”.' : 'Die Live-Suche liefert Quellen, hat aber ein kleines Gratis-Tageslimit. Bei „Limit erreicht" hier ausschalten.'}</p>
-      <button id="aiKeyRemove" class="ai-cfg-remove">${en ? 'Remove API key from this device' : 'API-Schlüssel von diesem Gerät entfernen'}</button>
+      ${keyBlock}
     </div>` : '';
 
   box.innerHTML = `
@@ -306,6 +315,14 @@ function renderAskAI(data, s) {
     const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
     if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; aiView = 'chat'; aiCfgOpen = false; clearChat(); renderAskAI(data, s); }
   });
+  // Optional "use my own key" inside settings (proxy mode).
+  const ownKeyInp = box.querySelector('#aiKey');
+  const ownKeySave = box.querySelector('#aiSave');
+  if (ownKeyInp && ownKeySave) {
+    const doSave = () => { const k = ownKeyInp.value.trim(); if (!k) return; saveAIKey(k); aiError = ''; renderAskAI(data, s); };
+    ownKeySave.addEventListener('click', doSave);
+    ownKeyInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); doSave(); } });
+  }
 
   const thread = box.querySelector('#aiThread');
   if (thread) thread.scrollTop = thread.scrollHeight;
