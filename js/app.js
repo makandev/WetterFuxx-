@@ -14,6 +14,7 @@ import {
 } from './store.js';
 import { buildShareBlob, buildFamilyBlob, SHARE_BUILDERS } from './sharecard.js';
 import { initAnalytics, fetchVisitorTotal, dashboardURL, isConfigured, counterImgURL } from './analytics.js';
+import { renderWorldTeaser, openWorld, closeWorld } from './worldweather.js';
 
 const $ = (s) => document.querySelector(s);
 let settings = loadSettings();
@@ -35,6 +36,7 @@ async function boot() {
   renderSavedChips();
   renderStreak();
   applyLayout();
+  renderWorldTeaser(); // live world events — independent of the chosen place
   maybeShowThemePicker(); // first visit → let people pick a look right away
 
   // 0) shared family set  1) shared single place  2) last used  3) geolocation  4) default
@@ -96,7 +98,7 @@ function setActiveTab(i) {
 
 // ---- Desktop masonry: pack Heute's cards tightly into columns (no gaps) ------
 const MASONRY_IDS = ['streakCard', 'ask', 'moment', 'clothing', 'nowcast', 'hourly',
-  'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon'];
+  'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon', 'worldwx'];
 let masonryRAF = 0;
 function applyMasonry() {
   const page = document.getElementById('page-today');
@@ -612,10 +614,13 @@ function wireEvents() {
   $('#btnVisitors').addEventListener('click', openVisitors);
   $('#visitorsClose').addEventListener('click', closeVisitors);
   $('#visitorsOverlay').addEventListener('click', (e) => { if (e.target.id === 'visitorsOverlay') closeVisitors(); });
+  $('#worldClose').addEventListener('click', closeWorld);
+  $('#worldOverlay').addEventListener('click', (e) => { if (e.target.id === 'worldOverlay') closeWorld(); });
+  $('#worldwx').addEventListener('click', (e) => { if (e.target.closest('#worldwx')) openWorld(); });
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); closeInstallHelp(); }
+    if (e.key === 'Escape') { closeSearch(); closeSettings(); closeVisitors(); closeInstallHelp(); closeWorld(); }
     if (e.key === '/' && !isTyping()) { e.preventDefault(); openSearch(); }
   });
   document.addEventListener('visibilitychange', () => {
