@@ -363,8 +363,10 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 /* ---- Frag den Fuxx — KI (opt-in AI mode) ---- */
 .askai .card-title { display: flex; align-items: center; gap: 8px; }
 .ai-beta { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #17263f; background: var(--accent); border-radius: 999px; padding: 2px 8px; }
-.ai-key-btn { margin-left: auto; background: none; border: none; font-size: 16px; cursor: pointer; opacity: .75; line-height: 1; }
-.ai-key-btn:hover { opacity: 1; }
+.ai-key-btn, .ai-new-btn { background: none; border: none; font-size: 16px; cursor: pointer; opacity: .75; line-height: 1; }
+.ai-new-btn { margin-left: auto; }
+.askai .card-title > .ai-beta + .ai-key-btn { margin-left: auto; }
+.ai-key-btn:hover, .ai-new-btn:hover { opacity: 1; }
 .ai-intro { font-size: 14px; line-height: 1.5; margin: 4px 0 8px; color: var(--text); }
 .ai-note { font-size: 12.5px; line-height: 1.5; margin: 0 0 12px; color: var(--text-dim); background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 9px 11px; }
 .ai-setup { display: flex; gap: 8px; margin-bottom: 8px; }
