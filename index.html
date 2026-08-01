@@ -82,7 +82,7 @@
           <section id="biowetter" class="card" hidden></section>
         </div>
         <section id="sunmoon" class="card"></section>
-        <section id="worldwx" class="card world-teaser" hidden></section>
+        <section id="worldwx" class="card world-teaser" role="button" tabindex="0" aria-label="Welt-Wetter öffnen" hidden></section>
         <footer class="foot">
           <span id="updated"></span>
           <span class="dot">·</span>
@@ -243,7 +243,7 @@
   </div>
 
   <!-- Welt-Wetter: live natural events worldwide (NASA EONET + USGS) -->
-  <div id="worldOverlay" class="overlay world-overlay">
+  <div id="worldOverlay" class="overlay world-overlay" role="dialog" aria-modal="true" aria-labelledby="worldHeadTitle">
     <div class="overlay-card world-card">
       <div class="settings-head">
         <h2 id="worldHeadTitle">🌍 Welt-Wetter</h2>
@@ -254,7 +254,7 @@
       <div id="world-map" class="world-map"></div>
       <div id="worldFilters" class="world-filters"></div>
       <div id="worldList" class="world-list"></div>
-      <div class="world-attrib" id="worldAttrib">Quellen: NASA EONET · USGS · Karte © OpenStreetMap</div>
+      <div class="world-attrib" id="worldAttrib">Quellen: NASA EONET · USGS · NOAA SWPC · Open-Meteo · Karte © OpenStreetMap</div>
     </div>
   </div>
 

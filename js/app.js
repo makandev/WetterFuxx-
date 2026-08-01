@@ -616,7 +616,9 @@ function wireEvents() {
   $('#visitorsOverlay').addEventListener('click', (e) => { if (e.target.id === 'visitorsOverlay') closeVisitors(); });
   $('#worldClose').addEventListener('click', closeWorld);
   $('#worldOverlay').addEventListener('click', (e) => { if (e.target.id === 'worldOverlay') closeWorld(); });
-  $('#worldwx').addEventListener('click', (e) => { if (e.target.closest('#worldwx')) openWorld(currentPlace, localWorldCtx()); });
+  const openWorldNow = () => openWorld(currentPlace, localWorldCtx());
+  $('#worldwx').addEventListener('click', (e) => { if (e.target.closest('#worldwx')) openWorldNow(); });
+  $('#worldwx').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openWorldNow(); } });
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
