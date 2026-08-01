@@ -655,54 +655,58 @@ function renderBiowetter(data, s) {
   if (d3 != null) { if (d3 > 1.5) { trend = t('trendRising'); tIcon = '↗'; } else if (d3 < -1.5) { trend = t('trendFalling'); tIcon = '↘'; } }
   F({ key: 'pressure', show: true, level: 0, icon: '🌡️', label: t('pressureTrend'), valueHtml: `${tIcon} ${trend}`, sub: d3 != null ? `${num(d3, 1)} hPa/3h` : '' });
 
+  // Every factor is ALWAYS shown (floored at "low/gering") so the breakdown is
+  // consistent at every place, whatever the value. Air-quality & pollen are the
+  // only exceptions — they need the air API, which isn't available everywhere.
+
   // 2 headache / migraine stimulus
   {
     const a3 = d3 != null ? Math.abs(d3) : 0, a12 = d12 != null ? Math.abs(d12) : 0;
     let lvl = LOW;
     if (a3 >= 3.5 || a12 >= 7 || (d12 != null && d12 <= -6)) lvl = HIGH;
     else if (a3 >= 2 || a12 >= 4) lvl = MOD;
-    F({ key: 'migraine', show: d3 != null, level: lvl, icon: '🤕', label: t('migraine'), badge: lvl, hint: t('bioMig_hint'), tip: t('bioMig_tip') });
+    F({ key: 'migraine', show: true, level: lvl, icon: '🤕', label: t('migraine'), badge: lvl, hint: t('bioMig_hint'), tip: t('bioMig_tip') });
   }
   // 3 circulation
-  if (feelsC != null) {
+  {
     let lvl = LOW;
-    if (feelsC >= 32) lvl = HIGH; else if (feelsC >= 28 || feelsC <= -8 || (swing != null && swing >= 13)) lvl = MOD;
+    if (feelsC != null) { if (feelsC >= 32) lvl = HIGH; else if (feelsC >= 28 || feelsC <= -8 || (swing != null && swing >= 13)) lvl = MOD; }
     F({ key: 'circulation', show: true, level: lvl, icon: '❤️', label: t('circulation'), badge: lvl, hint: t('bioCirc_hint'), tip: t('bioCirc_tip') });
   }
   // 4 mugginess
-  if (dewC != null && dewC >= 13) {
-    const lvl = dewC >= 18 ? HIGH : dewC >= 15 ? MOD : LOW;
-    F({ key: 'muggy', show: true, level: lvl, icon: '💦', label: t('muggy'), sub: `${t('dewPoint')} ${tempStr(h.dew_point_2m[idx])}`, badge: lvl, hint: t('bioMug_hint'), tip: t('bioMug_tip') });
+  {
+    const lvl = (dewC == null) ? LOW : dewC >= 18 ? HIGH : dewC >= 15 ? MOD : LOW;
+    F({ key: 'muggy', show: true, level: lvl, icon: '💦', label: t('muggy'), sub: (dewC != null && dewC >= 13) ? `${t('dewPoint')} ${tempStr(h.dew_point_2m[idx])}` : '', badge: lvl, hint: t('bioMug_hint'), tip: t('bioMug_tip') });
   }
-  // 5 cold stimulus (conditional)
-  if (feelsC != null && feelsC >= 1 && feelsC <= 10 && windKmh >= 15 && rh >= 75) {
-    const lvl = (feelsC <= 2 && windKmh >= 30) ? HIGH : MOD;
+  // 5 cold stimulus
+  {
+    let lvl = LOW;
+    if (feelsC != null && feelsC >= 1 && feelsC <= 10 && windKmh >= 15 && rh >= 75) lvl = (feelsC <= 2 && windKmh >= 30) ? HIGH : MOD;
     F({ key: 'cold', show: true, level: lvl, icon: '🤧', label: t('coldRisk'), badge: lvl, hint: t('bioCold_hint'), tip: t('bioCold_tip') });
   }
-  // 6 day–night temperature swing (conditional)
-  if (swing != null && swing >= 10) {
-    F({ key: 'swing', show: true, level: swing >= 14 ? HIGH : MOD, icon: '📈', label: t('bioSwingLbl'), sub: `${Math.round(swing)}°`, badge: swing >= 14 ? HIGH : MOD, hint: t('bioSwing_hint'), tip: t('bioSwing_tip') });
+  // 6 day–night temperature swing
+  {
+    const lvl = (swing == null) ? LOW : swing >= 14 ? HIGH : swing >= 10 ? MOD : LOW;
+    F({ key: 'swing', show: true, level: lvl, icon: '📈', label: t('bioSwingLbl'), sub: swing != null ? `${Math.round(swing)}°` : '', badge: lvl, hint: t('bioSwing_hint'), tip: t('bioSwing_tip') });
   }
-  // 7 wind / foehn (conditional)
-  if (gustKmh >= 40) {
-    const lvl = gustKmh >= 60 ? HIGH : MOD;
+  // 7 wind / foehn
+  {
+    const lvl = gustKmh >= 60 ? HIGH : gustKmh >= 40 ? MOD : LOW;
     const foehn = (rh < 40 && feelsC != null && feelsC >= 18 && windKmh >= 25 && cloud < 40);
     F({ key: 'wind', show: true, level: lvl, icon: '💨', label: foehn ? t('bioFoehnLbl') : t('bioWindLbl'), sub: `${Math.round(gustKmh)} ${windUnitLabel(s.units.wind)}`, badge: lvl, hint: t('bioWind_hint'), tip: t('bioWind_tip') });
   }
   // 8 UV
   {
     const uvv = h.uv_index && h.uv_index[idx] != null ? h.uv_index[idx] : (d.uv_index_max ? (d.uv_index_max[0] || 0) : 0);
-    if (uvv >= 3) {
-      const ul = uvLevel(uvv);
-      F({ key: 'uv', show: true, level: uvv >= 8 ? HIGH : uvv >= 6 ? MOD : LOW, icon: '🔆', label: t('uv'), sub: `${num(uvv)}`, valueHtml: `<span class="badge ${ul.cls}">${ul.label}</span>`, hint: t('bioUv_hint'), tip: ul.advice });
-    }
+    const ul = uvLevel(uvv);
+    F({ key: 'uv', show: true, level: uvv >= 8 ? HIGH : uvv >= 6 ? MOD : LOW, icon: '🔆', label: t('uv'), sub: `${num(uvv)}`, valueHtml: `<span class="badge ${ul.cls}">${ul.label}</span>`, hint: t('bioUv_hint'), tip: ul.advice });
   }
-  // 9 air quality for sensitive groups (conditional)
-  if (air && air.current && air.current.european_aqi != null && air.current.european_aqi > 40) {
-    const al = aqiLevel(air.current.european_aqi);
-    if (al) F({ key: 'air', show: true, level: air.current.european_aqi > 80 ? HIGH : MOD, icon: '🍃', label: t('airQuality'), sub: `AQI ${Math.round(air.current.european_aqi)}`, valueHtml: `<span class="badge ${al.cls}">${al.label}</span>`, hint: t('bioAir_hint'), tip: t('bioAir_tip') });
+  // 9 air quality (needs the air-quality API — not available at every place)
+  if (air && air.current && air.current.european_aqi != null) {
+    const aqi = air.current.european_aqi, al = aqiLevel(aqi);
+    if (al) F({ key: 'air', show: true, level: aqi > 80 ? HIGH : aqi > 40 ? MOD : LOW, icon: '🍃', label: t('airQuality'), sub: `AQI ${Math.round(aqi)}`, valueHtml: `<span class="badge ${al.cls}">${al.label}</span>`, hint: t('bioAir_hint'), tip: t('bioAir_tip') });
   }
-  // 10 pollen / allergy (conditional)
+  // 10 pollen / allergy (needs the air-quality API)
   if (air && air.hourly) {
     const ph = air.hourly;
     const arts = [['grass', ph.grass_pollen], ['birch', ph.birch_pollen], ['alder', ph.alder_pollen], ['ragweed', ph.ragweed_pollen], ['mugwort', ph.mugwort_pollen], ['olive', ph.olive_pollen]];
@@ -712,26 +716,29 @@ function renderBiowetter(data, s) {
       const pl = pollenLevel(v); const rank = pl.cls === 'lvl-poor' ? 3 : pl.cls === 'lvl-moderate' ? 2 : pl.cls === 'lvl-good' ? 1 : 0;
       if (!best || rank > best.rank) best = { key, pl, rank };
     }
-    if (best && best.rank >= 2) F({ key: 'pollen', show: true, level: best.rank >= 3 ? HIGH : MOD, icon: '🌸', label: t('pollen'), sub: t(best.key), valueHtml: `<span class="badge ${best.pl.cls}">${best.pl.label}</span>`, hint: t('bioPollen_hint'), tip: t('bioPollen_tip') });
+    if (best) F({ key: 'pollen', show: true, level: best.rank >= 3 ? HIGH : best.rank >= 2 ? MOD : LOW, icon: '🌸', label: t('pollen'), sub: t(best.key), valueHtml: `<span class="badge ${best.pl.cls}">${best.pl.label}</span>`, hint: t('bioPollen_hint'), tip: t('bioPollen_tip') });
   }
-  // 11 joints / rheumatism (conditional)
-  if (rh != null && feelsC != null) {
-    let lvl = 0;
-    if (rh >= 85 && feelsC <= 10 && ((d3 != null && d3 <= -2) || (d12 != null && d12 <= -5))) lvl = HIGH;
-    else if (rh >= 80 && feelsC <= 14 && ((d3 != null && d3 <= -1) || (d12 != null && d12 <= -3))) lvl = MOD;
-    if (lvl >= MOD) F({ key: 'joints', show: true, level: lvl, icon: '🦴', label: t('bioJointLbl'), badge: lvl, hint: t('bioJoint_hint'), tip: t('bioJoint_tip') });
+  // 11 joints / rheumatism
+  {
+    let lvl = LOW;
+    if (rh != null && feelsC != null) {
+      if (rh >= 85 && feelsC <= 10 && ((d3 != null && d3 <= -2) || (d12 != null && d12 <= -5))) lvl = HIGH;
+      else if (rh >= 80 && feelsC <= 14 && ((d3 != null && d3 <= -1) || (d12 != null && d12 <= -3))) lvl = MOD;
+    }
+    F({ key: 'joints', show: true, level: lvl, icon: '🦴', label: t('bioJointLbl'), badge: lvl, hint: t('bioJoint_hint'), tip: t('bioJoint_tip') });
   }
-  // 12 airways / asthma (conditional)
+  // 12 airways / asthma
   {
     const a = (air && air.current) ? air.current : {};
-    let lvl = 0;
+    let lvl = LOW;
     if ((a.ozone >= 180) || (a.pm2_5 >= 50) || (a.pm10 >= 100) || (feelsC != null && feelsC <= -5 && rh < 45)) lvl = HIGH;
     else if ((a.ozone >= 120) || (a.pm2_5 >= 25) || (a.pm10 >= 50) || (feelsC != null && feelsC <= 0 && rh < 50)) lvl = MOD;
-    if (lvl >= MOD) F({ key: 'lungs', show: true, level: lvl, icon: '🫁', label: t('bioLungLbl'), badge: lvl, hint: t('bioLung_hint'), tip: t('bioLung_tip') });
+    F({ key: 'lungs', show: true, level: lvl, icon: '🫁', label: t('bioLungLbl'), badge: lvl, hint: t('bioLung_hint'), tip: t('bioLung_tip') });
   }
-  // 13 sleep / tropical night (conditional)
-  if (tminC != null && tminC >= 18) {
-    F({ key: 'sleep', show: true, level: tminC >= 20 ? HIGH : MOD, icon: '🌙', label: t('bioSleepLbl'), sub: `${en ? 'low' : 'Tief'} ${tempStr(d.temperature_2m_min[0])}`, badge: tminC >= 20 ? HIGH : MOD, hint: t('bioSleep_hint'), tip: t('bioSleep_tip') });
+  // 13 sleep / tropical night
+  {
+    const lvl = (tminC == null) ? LOW : tminC >= 20 ? HIGH : tminC >= 18 ? MOD : LOW;
+    F({ key: 'sleep', show: true, level: lvl, icon: '🌙', label: t('bioSleepLbl'), sub: (tminC != null) ? `${en ? 'low' : 'Tief'} ${tempStr(d.temperature_2m_min[0])}` : '', badge: lvl, hint: t('bioSleep_hint'), tip: t('bioSleep_tip') });
   }
 
   const items = factors.filter((f) => f.show).sort((a, b) => b.level - a.level);
@@ -1454,7 +1461,7 @@ function renderSunMoon(data) {
     const polar = (d.daylight_duration && d.daylight_duration[0] > 43200)
       ? (getLang() === 'en' ? 'Polar day – the sun stays up' : 'Polartag – die Sonne bleibt oben')
       : (getLang() === 'en' ? 'Polar night – the sun stays down' : 'Polarnacht – die Sonne bleibt unten');
-    $('#sunmoon').innerHTML = `<div class="card-title">☀️ ${t('sunMoon')}</div>
+    $('#sunmoon').innerHTML = `<div class="card-title has-share">☀️ ${t('sunMoon')}${shareBtn('sunmoon')}</div>
       <p class="polar-note">🌍 ${polar}</p>
       <div class="moon-row"><span class="moon-emoji">${moon.emoji}</span>
       <div><b>${moon.name}</b><span class="lbl">${t('moonPhase')} · ${moon.illum}%</span></div></div>`;
@@ -1473,7 +1480,7 @@ function renderSunMoon(data) {
   const sy = arcH - Math.sin(angle) * (arcH - 14) - 6;
 
   $('#sunmoon').innerHTML = `
-    <div class="card-title">☀️ ${t('sunMoon')}</div>
+    <div class="card-title has-share">☀️ ${t('sunMoon')}${shareBtn('sunmoon')}</div>
     <div class="sun-arc">
       <svg viewBox="0 0 ${arcW} ${arcH}" class="arc-svg">
         <path d="M12 ${arcH - 6} A ${arcW / 2 - 12} ${arcH - 14} 0 0 1 ${arcW - 12} ${arcH - 6}" class="arc-path"/>
