@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v32';
+const CACHE = 'wetterfux-v33';
 const SHELL = [
   './',
   './index.html',
@@ -21,6 +21,7 @@ const SHELL = [
   './js/skyshow.js',
   './js/analytics.js',
   './js/radar.js',
+  './js/worldweather.js',
   './vendor/leaflet/leaflet.js',
   './vendor/leaflet/leaflet.css',
   './manifest.webmanifest',
@@ -58,7 +59,7 @@ self.addEventListener('fetch', (e) => {
   }
 
   // Weather APIs → network-first (always try fresh, fall back to cache when offline)
-  if (/open-meteo\.com|bigdatacloud\.net|brightsky\.dev|api\.rainviewer\.com|photon\.komoot\.io/.test(url.hostname)) {
+  if (/open-meteo\.com|bigdatacloud\.net|brightsky\.dev|api\.rainviewer\.com|photon\.komoot\.io|eonet\.gsfc\.nasa\.gov|earthquake\.usgs\.gov/.test(url.hostname)) {
     e.respondWith(
       fetch(req).then((res) => {
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(req, copy)); }
