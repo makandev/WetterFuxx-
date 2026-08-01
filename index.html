@@ -69,7 +69,6 @@
         </section>
         <section id="streakCard" class="card streak-card" hidden></section>
         <section id="ask" class="card" hidden></section>
-        <section id="askai" class="card askai" hidden></section>
         <section id="moment" class="card moment" hidden></section>
         <section id="clothing" class="card clothing"></section>
         <section id="nowcast" class="card nowcast" hidden></section>
@@ -91,7 +90,12 @@
         </footer>
       </div>
 
-      <!-- Tab 2: Verlauf — extra detail + map -->
+      <!-- Tab 2: Fragen — the opt-in AI companion -->
+      <div class="page" id="page-questions" role="tabpanel" aria-label="Fragen">
+        <section id="askai" class="card askai" hidden></section>
+      </div>
+
+      <!-- Tab 3: Verlauf — extra detail + map -->
       <div class="page" id="page-history" role="tabpanel" aria-label="Verlauf">
         <section id="sixhour" class="card" hidden></section>
         <section id="radar" class="card radar">
@@ -124,9 +128,10 @@
     <!-- Bottom tab bar -->
     <nav class="tabbar" id="tabbar" role="tablist">
       <button class="tab active" data-tab="0" role="tab" aria-selected="true"><span class="tab-ic">🏠</span><span class="tab-lb">Heute</span></button>
-      <button class="tab" data-tab="1" role="tab" aria-selected="false"><span class="tab-ic">📈</span><span class="tab-lb">Verlauf</span></button>
-      <button class="tab" data-tab="2" role="tab" aria-selected="false"><span class="tab-ic">🩺</span><span class="tab-lb">Gesundheit</span></button>
-      <button class="tab" data-tab="3" role="tab" aria-selected="false"><span class="tab-ic">👪</span><span class="tab-lb">Familie</span></button>
+      <button class="tab" data-tab="1" role="tab" aria-selected="false"><span class="tab-ic">🦊</span><span class="tab-lb">Fragen</span></button>
+      <button class="tab" data-tab="2" role="tab" aria-selected="false"><span class="tab-ic">📈</span><span class="tab-lb">Verlauf</span></button>
+      <button class="tab" data-tab="3" role="tab" aria-selected="false"><span class="tab-ic">🩺</span><span class="tab-lb">Gesundheit</span></button>
+      <button class="tab" data-tab="4" role="tab" aria-selected="false"><span class="tab-ic">👪</span><span class="tab-lb">Familie</span></button>
     </nav>
   </div>
 
