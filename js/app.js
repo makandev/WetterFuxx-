@@ -83,7 +83,7 @@ function wireTabs() {
   window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; scheduleMasonry(); });
 }
 function setActiveTab(i) {
-  if (i < 0 || i > 3 || i === activeTab) return;
+  if (i < 0 || i > 4 || i === activeTab) return;
   activeTab = i;
   document.querySelectorAll('.tab').forEach((tab) => {
     const on = +tab.dataset.tab === i;
@@ -92,12 +92,12 @@ function setActiveTab(i) {
   });
   // On desktop only the active page is shown; on mobile the class is harmless
   document.querySelectorAll('.page').forEach((p, idx) => p.classList.toggle('active-page', idx === i));
-  if (i === 1) setTimeout(invalidateRadar, 250); // Verlauf → recompute map size
+  if (i === 2) setTimeout(invalidateRadar, 250); // Verlauf → recompute map size
   if (i === 0) scheduleMasonry();
 }
 
 // ---- Desktop masonry: pack Heute's cards tightly into columns (no gaps) ------
-const MASONRY_IDS = ['streakCard', 'ask', 'askai', 'moment', 'clothing', 'nowcast', 'hourly',
+const MASONRY_IDS = ['streakCard', 'ask', 'moment', 'clothing', 'nowcast', 'hourly',
   'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon', 'worldwx'];
 let masonryRAF = 0;
 function applyMasonry() {
