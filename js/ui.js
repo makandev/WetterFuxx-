@@ -6,7 +6,7 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
-import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat } from './ai.js';
+import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat, AI_MODELS, loadAICfg, saveAICfg } from './ai.js';
 import {
   loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
   loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
@@ -138,6 +138,7 @@ let aiBusy = false;
 let aiError = '';
 let aiDraft = ''; // a failed question, put back into the box so it isn't lost
 let aiView = 'chat'; // 'chat' (live conversation) | 'themen' (grouped history)
+let aiCfgOpen = false; // KI settings panel (model + live-search) expanded?
 
 // Pair the flat history into question→answer entries (for the topic view).
 function aiPairs() {
@@ -204,7 +205,9 @@ function aiErrMsg(code, en) {
   switch (code) {
     case 'network': return en ? 'No connection to Google — check your internet.' : 'Keine Verbindung zu Google – prüfe dein Internet.';
     case 'bad-key': return en ? 'That key was rejected. Tap 🔑 to fix it in Google AI Studio.' : 'Der Schlüssel wurde abgelehnt. Tippe auf 🔑, um ihn in Google AI Studio zu prüfen.';
-    case 'quota': return en ? 'Free limit reached for now — try again a bit later.' : 'Gratis-Limit gerade erreicht – versuch es später nochmal.';
+    case 'quota': return en
+      ? 'Gemini free limit reached (daily or live-search quota). Tip: open ⚙️ and turn off live web search, or pick another model — or try later.'
+      : 'Gemini-Gratislimit erreicht (Tages- oder Live-Suche-Kontingent). Tipp: unter ⚙️ die Live-Websuche ausschalten oder ein anderes Modell wählen – oder später nochmal.';
     case 'empty': return en ? 'No answer this time — try rephrasing.' : 'Diesmal keine Antwort – formuliere die Frage anders.';
     default: return en ? 'Something went wrong — please try again.' : 'Etwas ist schiefgelaufen – bitte nochmal versuchen.';
   }
@@ -267,11 +270,22 @@ function renderAskAI(data, s) {
     </div>
     ${aiHistory.length ? '' : `<div class="fox-chips">${examples.map((x) => `<button class="ai-chip">${escapeHtml(x)}</button>`).join('')}</div>`}`;
   const themenPanel = `<div class="ai-themen">${aiThemenHTML(en)}</div>`;
+  const cfg = loadAICfg();
+  const cfgPanel = aiCfgOpen ? `
+    <div class="ai-cfg">
+      <label class="ai-cfg-row"><span>${en ? 'Model' : 'Modell'}</span>
+        <select id="aiModel">${AI_MODELS.map((m) => `<option value="${m.id}" ${m.id === cfg.model ? 'selected' : ''}>${escapeHtml(m.label)}</option>`).join('')}</select></label>
+      <label class="ai-cfg-row"><span>${en ? 'Live web search (sources)' : 'Live-Websuche (Quellen)'}</span>
+        <input type="checkbox" id="aiGround" ${cfg.grounding ? 'checked' : ''}></label>
+      <p class="ai-cfg-hint">${en ? 'Live search adds sources but has a small free daily limit. Turn it off if you hit “limit reached”.' : 'Die Live-Suche liefert Quellen, hat aber ein kleines Gratis-Tageslimit. Bei „Limit erreicht" hier ausschalten.'}</p>
+      <button id="aiKeyRemove" class="ai-cfg-remove">${en ? 'Remove API key from this device' : 'API-Schlüssel von diesem Gerät entfernen'}</button>
+    </div>` : '';
 
   box.innerHTML = `
     <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
       ${aiHistory.length ? `<button class="ai-new-btn" aria-label="${en ? 'New conversation' : 'Neues Gespräch'}" title="${en ? 'New conversation' : 'Neues Gespräch'}">🗑️</button>` : ''}
-      <button class="ai-key-btn" aria-label="${en ? 'API key settings' : 'Schlüssel-Einstellungen'}" title="${en ? 'API key' : 'Schlüssel'}">🔑</button></div>
+      <button class="ai-key-btn ${aiCfgOpen ? 'on' : ''}" aria-label="${en ? 'AI settings' : 'KI-Einstellungen'}" title="${en ? 'Settings' : 'Einstellungen'}" aria-expanded="${aiCfgOpen}">⚙️</button></div>
+    ${cfgPanel}
     <div class="ai-seg" role="tablist">
       <button class="ai-seg-btn ${aiView === 'chat' ? 'on' : ''}" data-view="chat">💬 Chat</button>
       <button class="ai-seg-btn ${aiView === 'themen' ? 'on' : ''}" data-view="themen">📚 ${en ? 'Topics' : 'Themen'}</button>
@@ -282,6 +296,16 @@ function renderAskAI(data, s) {
     const v = b.dataset.view;
     if (v !== aiView) { aiView = v; renderAskAI(data, s); }
   }));
+  box.querySelector('.ai-key-btn').addEventListener('click', () => { aiCfgOpen = !aiCfgOpen; renderAskAI(data, s); });
+  const modelSel = box.querySelector('#aiModel');
+  if (modelSel) modelSel.addEventListener('change', () => { saveAICfg({ model: modelSel.value }); });
+  const groundChk = box.querySelector('#aiGround');
+  if (groundChk) groundChk.addEventListener('change', () => { saveAICfg({ grounding: groundChk.checked }); });
+  const keyRemove = box.querySelector('#aiKeyRemove');
+  if (keyRemove) keyRemove.addEventListener('click', () => {
+    const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
+    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; aiView = 'chat'; aiCfgOpen = false; clearChat(); renderAskAI(data, s); }
+  });
 
   const thread = box.querySelector('#aiThread');
   if (thread) thread.scrollTop = thread.scrollHeight;
@@ -327,10 +351,6 @@ function renderAskAI(data, s) {
   if (newBtn) newBtn.addEventListener('click', () => {
     const msg = en ? 'Start a new conversation? This clears the current chat.' : 'Neues Gespräch starten? Der aktuelle Chat wird gelöscht.';
     if (window.confirm(msg)) { aiHistory = []; aiError = ''; aiView = 'chat'; clearChat(); renderAskAI(data, s); }
-  });
-  box.querySelector('.ai-key-btn').addEventListener('click', () => {
-    const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
-    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; aiView = 'chat'; clearChat(); renderAskAI(data, s); }
   });
 }
 
@@ -724,11 +744,13 @@ function renderBiowetter(data, s) {
   });
 
   box.hidden = false;
+  // Always show every applicable factor (Kreislauf, Kopfschmerz, UV …) so the
+  // breakdown is there even on calm days — with a reassuring note up top when
+  // nothing is elevated, instead of collapsing to just the pressure line.
   box.innerHTML = `<div class="card-title">🧪 ${t('biowetter')}</div>
     <p class="bio-sub">${t('bioSub')}</p>
-    <div class="bio">${active.length
-      ? items.map(render).join('')
-      : render(factors[0]) + `<div class="bio-quiet">🍃 ${t('bioQuiet')}</div>`}</div>
+    ${active.length ? '' : `<div class="bio-quiet">🍃 ${t('bioQuiet')}</div>`}
+    <div class="bio">${items.map(render).join('')}</div>
     ${active.length && hasJournal ? `<p class="bio-journal">📓 ${t('bioJournalPrompt')}</p>` : ''}
     <p class="bio-disc">🔒 ${t('bioDisclaimer')}</p>`;
 }

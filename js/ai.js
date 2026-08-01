@@ -10,9 +10,31 @@
 // the forecast — that rule is enforced in the system prompt below.
 
 const KEY_STORE = 'wf.ai.v1';
-const MODEL = 'gemini-2.0-flash';
+const CFG_STORE = 'wf.ai.cfg.v1';
 const endpoint = (model, key) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+
+// Models the user can pick. Flash tiers work on the free plan; the live web
+// search (grounding) has its own, smaller free quota — hence the toggle.
+export const AI_MODELS = [
+  { id: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Standard)' },
+  { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (neuer)' },
+  { id: 'gemini-2.0-flash-lite', label: 'Gemini 2.0 Flash-Lite (sparsam)' },
+  { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+];
+const CFG_DEFAULT = { model: 'gemini-2.0-flash', grounding: true };
+export function loadAICfg() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CFG_STORE) || '{}');
+    return {
+      model: AI_MODELS.some((m) => m.id === c.model) ? c.model : CFG_DEFAULT.model,
+      grounding: c.grounding !== false,
+    };
+  } catch { return { ...CFG_DEFAULT }; }
+}
+export function saveAICfg(cfg) {
+  try { localStorage.setItem(CFG_STORE, JSON.stringify({ ...loadAICfg(), ...cfg })); } catch { /* private mode */ }
+}
 
 export function loadAIKey() {
   try { return (JSON.parse(localStorage.getItem(KEY_STORE) || '{}').key) || ''; }
@@ -126,6 +148,7 @@ function topicGuidance(tp, lang) {
 export async function askFuxxAI({ question, context = '', history = [], lang = 'de' }) {
   const key = loadAIKey();
   if (!key) throw new Error('no-key');
+  const cfg = loadAICfg();
 
   const contents = [];
   for (const m of history) {
@@ -137,22 +160,31 @@ export async function askFuxxAI({ question, context = '', history = [], lang = '
   contents.push({ role: 'user', parts: [{ text: userText }] });
 
   const tp = topicFor(question);
-  const body = {
+  const baseBody = {
     systemInstruction: { parts: [{ text: systemPrompt(lang) }, { text: topicGuidance(tp, lang) }] },
     contents,
-    tools: [{ google_search: {} }],
     // Lower temperature keeps factual answers close to the sources.
     generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
   };
 
-  let res;
-  try {
-    res = await fetch(endpoint(MODEL, key), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch { throw new Error('network'); }
+  // The live web search (grounding) has a small, separate free quota — it's the
+  // usual reason a fresh key hits "limit reached". So: try with it when enabled,
+  // and if that specific call is rate-limited, fall back to a plain (un-grounded)
+  // answer once instead of failing outright.
+  const call = async (useSearch) => {
+    const body = useSearch ? { ...baseBody, tools: [{ google_search: {} }] } : baseBody;
+    let res;
+    try {
+      res = await fetch(endpoint(cfg.model, key), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      });
+    } catch { throw new Error('network'); }
+    return res;
+  };
+
+  const wantSearch = cfg.grounding;
+  let res = await call(wantSearch);
+  if (res.status === 429 && wantSearch) res = await call(false); // retry ungrounded
 
   if (res.status === 400 || res.status === 403) throw new Error('bad-key');
   if (res.status === 429) throw new Error('quota');
