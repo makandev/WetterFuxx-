@@ -6,6 +6,7 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
+import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI } from './ai.js';
 import {
   loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
   loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
@@ -32,6 +33,7 @@ export function renderAll(data, settings) {
   renderAlerts(data, settings);
   renderHero(data, settings);
   renderAsk(data, settings);
+  renderAskAI(data, settings);
   renderMoment(data, settings);
   renderClothing(data, settings);
   renderRadar(data);
@@ -372,6 +374,141 @@ function renderAsk(data, s) {
   box.querySelector('#foxAsk').addEventListener('click', () => ask());
   inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
   box.querySelectorAll('.fox-chip').forEach((c) => c.addEventListener('click', () => { inp.value = c.textContent; ask(c.textContent); }));
+}
+
+// ---- "Frag den Fuxx — KI": opt-in AI mode (Google Gemini) --------------------
+// A separate, opt-in companion for open-ended questions (weather, nature, the
+// universe). It talks to Google Gemini with live web grounding — so it is NOT
+// private like the rest of the app, which is why it is off until the user adds
+// their own key. The deterministic fox above and the forecast keep working
+// without it. Conversation state lives in module scope so a data refresh
+// (which re-renders the card) doesn't wipe an ongoing chat.
+let aiHistory = [];
+let aiBusy = false;
+let aiError = '';
+
+// Compact, factual snapshot of the app's own numbers — handed to the model so
+// it answers forecast questions from real data instead of inventing them.
+function aiWeatherContext(data) {
+  const en = getLang() === 'en';
+  const c = data.forecast.current;
+  const d = data.forecast.daily;
+  const place = placeLabel(data.place);
+  const dateStr = new Date(placeNowMs()).toLocaleDateString(en ? 'en-GB' : 'de-DE',
+    { weekday: 'long', day: 'numeric', month: 'long' });
+  const hi = tempStr(d.temperature_2m_max[0]);
+  const lo = tempStr(d.temperature_2m_min[0]);
+  const pop = d.precipitation_probability_max ? Math.round(d.precipitation_probability_max[0] || 0) : 0;
+  const desc = describe(c.weather_code, getLang());
+  return en
+    ? `[App data — use these for the forecast, do not invent numbers] Place: ${place}. Today (${dateStr}): now ${tempStr(c.temperature_2m)} (feels ${tempStr(c.apparent_temperature)}), ${desc}; high ${hi}, low ${lo}, rain chance ${pop}%.`
+    : `[App-Daten – nutze diese für die Vorhersage, erfinde keine Zahlen] Ort: ${place}. Heute (${dateStr}): jetzt ${tempStr(c.temperature_2m)} (gefühlt ${tempStr(c.apparent_temperature)}), ${desc}; Höchst ${hi}, Tiefst ${lo}, Regenrisiko ${pop}%.`;
+}
+
+function aiErrMsg(code, en) {
+  switch (code) {
+    case 'network': return en ? 'No connection to Google — check your internet.' : 'Keine Verbindung zu Google – prüfe dein Internet.';
+    case 'bad-key': return en ? 'That key was rejected. Tap 🔑 to fix it in Google AI Studio.' : 'Der Schlüssel wurde abgelehnt. Tippe auf 🔑, um ihn in Google AI Studio zu prüfen.';
+    case 'quota': return en ? 'Free limit reached for now — try again a bit later.' : 'Gratis-Limit gerade erreicht – versuch es später nochmal.';
+    case 'empty': return en ? 'No answer this time — try rephrasing.' : 'Diesmal keine Antwort – formuliere die Frage anders.';
+    default: return en ? 'Something went wrong — please try again.' : 'Etwas ist schiefgelaufen – bitte nochmal versuchen.';
+  }
+}
+
+// Very small formatter: escape, **bold**, and keep line breaks.
+function aiFormat(text) {
+  return escapeHtml(text)
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/\n/g, '<br>');
+}
+function aiSourcesHTML(sources, en) {
+  if (!sources || !sources.length) return '';
+  const links = sources.map((s, i) =>
+    `<a href="${escapeHtml(s.uri)}" target="_blank" rel="noopener">${escapeHtml(s.title || ('[' + (i + 1) + ']'))}</a>`).join(' · ');
+  return `<div class="ai-src">${en ? 'Sources' : 'Quellen'}: ${links}</div>`;
+}
+
+function renderAskAI(data, s) {
+  const box = $('#askai');
+  const en = getLang() === 'en';
+  box.hidden = false;
+
+  // --- Setup state: no key yet → invite + privacy note + key field ---
+  if (!hasAIKey()) {
+    box.innerHTML = `
+      <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span></div>
+      <p class="ai-intro">${en ? 'Ask anything about weather, nature and the universe. Answers come from Google Gemini with live web sources.' : 'Frag alles über Wetter, Natur und das Universum. Die Antworten kommen von Google Gemini – mit echten Web-Quellen.'}</p>
+      <p class="ai-note">🔒 ${en ? 'Off by default. These questions are sent to Google. Your key stays only on this device — the app’s forecast stays private and works without AI.' : 'Standardmäßig aus. Diese Fragen gehen an Google. Dein Schlüssel bleibt nur auf diesem Gerät – die Vorhersage der App bleibt privat und funktioniert ohne KI.'}</p>
+      <div class="ai-setup">
+        <input id="aiKey" type="password" autocomplete="off" aria-label="${en ? 'Gemini API key' : 'Gemini-API-Schlüssel'}" placeholder="${en ? 'Paste your free Gemini API key' : 'Kostenlosen Gemini-Schlüssel einfügen'}" />
+        <button id="aiSave">${en ? 'Save' : 'Speichern'}</button>
+      </div>
+      <a class="ai-getkey" href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">${en ? 'Get a free key (Google AI Studio) ↗' : 'Kostenlosen Schlüssel holen (Google AI Studio) ↗'}</a>`;
+    const keyInp = box.querySelector('#aiKey');
+    const save = () => { const k = keyInp.value.trim(); if (!k) return; saveAIKey(k); aiError = ''; renderAskAI(data, s); };
+    box.querySelector('#aiSave').addEventListener('click', save);
+    keyInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    return;
+  }
+
+  // --- Chat state: key present ---
+  const mascot = buildClothingAdvice(data, s).mascot;
+  const examples = en
+    ? ['Why does lightning happen?', 'When can I see shooting stars?', 'Explain rainbows']
+    : ['Warum blitzt es?', 'Wann sehe ich Sternschnuppen?', 'Erkläre Regenbögen'];
+  const msgs = aiHistory.map((m) => m.role === 'user'
+    ? `<div class="ai-msg ai-user">${escapeHtml(m.text)}</div>`
+    : `<div class="ai-msg ai-bot"><div class="ai-ava" aria-hidden="true">${foxSVG(mascot)}</div><div class="ai-bubble">${aiFormat(m.text)}${aiSourcesHTML(m.sources, en)}</div></div>`).join('');
+  const thinking = aiBusy
+    ? `<div class="ai-msg ai-bot"><div class="ai-ava" aria-hidden="true">${foxSVG(mascot)}</div><div class="ai-bubble ai-thinking"><span></span><span></span><span></span></div></div>`
+    : '';
+  const errHTML = aiError ? `<div class="ai-err">${escapeHtml(aiErrMsg(aiError, en))}</div>` : '';
+  const empty = `<p class="ai-empty">${en ? 'Ask me anything about the world outside 🌍' : 'Frag mich alles über die Welt da draußen 🌍'}</p>`;
+  box.innerHTML = `
+    <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
+      <button class="ai-key-btn" aria-label="${en ? 'API key settings' : 'Schlüssel-Einstellungen'}" title="${en ? 'API key' : 'Schlüssel'}">🔑</button></div>
+    <div class="ai-thread" id="aiThread">${(msgs || empty) + thinking + errHTML}</div>
+    <div class="fox-inputrow">
+      <input id="aiQ" type="text" autocomplete="off" ${aiBusy ? 'disabled' : ''} aria-label="${en ? 'Ask the AI' : 'Die KI fragen'}" placeholder="${en ? 'e.g. Why is the sky blue?' : 'z. B. Warum ist der Himmel blau?'}" />
+      <button id="aiAsk" ${aiBusy ? 'disabled' : ''} aria-label="${en ? 'Ask' : 'Fragen'}">➤</button>
+    </div>
+    ${aiHistory.length ? '' : `<div class="fox-chips">${examples.map((x) => `<button class="ai-chip">${escapeHtml(x)}</button>`).join('')}</div>`}`;
+
+  const thread = box.querySelector('#aiThread');
+  if (thread) thread.scrollTop = thread.scrollHeight;
+  const inp = box.querySelector('#aiQ');
+
+  const send = async (q) => {
+    const question = (q != null ? q : inp.value).trim();
+    if (!question || aiBusy) return;
+    aiHistory.push({ role: 'user', text: question });
+    aiBusy = true; aiError = '';
+    renderAskAI(data, s);
+    try {
+      const prior = aiHistory.slice(0, -1);
+      const { text, sources } = await askFuxxAI({
+        question, context: aiWeatherContext(data), history: prior,
+        lang: en ? 'en' : 'de',
+      });
+      aiHistory.push({ role: 'ai', text, sources });
+    } catch (e) {
+      aiError = (e && e.message) || 'error';
+    } finally {
+      aiBusy = false;
+      renderAskAI(data, s);
+    }
+  };
+
+  box.querySelector('#aiAsk').addEventListener('click', () => send());
+  if (inp) {
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
+    if (!aiBusy) inp.focus({ preventScroll: true });
+  }
+  box.querySelectorAll('.ai-chip').forEach((c) => c.addEventListener('click', () => send(c.textContent)));
+  box.querySelector('.ai-key-btn').addEventListener('click', () => {
+    const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
+    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; renderAskAI(data, s); }
+  });
 }
 
 // ---- Weather moment of the day ----------------------------------------------

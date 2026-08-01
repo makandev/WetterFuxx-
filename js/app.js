@@ -97,7 +97,7 @@ function setActiveTab(i) {
 }
 
 // ---- Desktop masonry: pack Heute's cards tightly into columns (no gaps) ------
-const MASONRY_IDS = ['streakCard', 'ask', 'moment', 'clothing', 'nowcast', 'hourly',
+const MASONRY_IDS = ['streakCard', 'ask', 'askai', 'moment', 'clothing', 'nowcast', 'hourly',
   'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon', 'worldwx'];
 let masonryRAF = 0;
 function applyMasonry() {
