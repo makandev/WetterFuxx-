@@ -616,7 +616,7 @@ function wireEvents() {
   $('#visitorsOverlay').addEventListener('click', (e) => { if (e.target.id === 'visitorsOverlay') closeVisitors(); });
   $('#worldClose').addEventListener('click', closeWorld);
   $('#worldOverlay').addEventListener('click', (e) => { if (e.target.id === 'worldOverlay') closeWorld(); });
-  $('#worldwx').addEventListener('click', (e) => { if (e.target.closest('#worldwx')) openWorld(); });
+  $('#worldwx').addEventListener('click', (e) => { if (e.target.closest('#worldwx')) openWorld(currentPlace, localWorldCtx()); });
   $('#errRetry').addEventListener('click', refresh);
   document.querySelectorAll('[data-set]').forEach((el) => el.addEventListener('change', onSettingChange));
   document.addEventListener('keydown', (e) => {
@@ -630,6 +630,17 @@ function wireEvents() {
 function isTyping() {
   const a = document.activeElement;
   return a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT');
+}
+
+// Local context the Welt-Wetter "Betrifft uns?" banner uses (sunset + rain soon)
+function localWorldCtx() {
+  const d = currentData && currentData.forecast && currentData.forecast.daily;
+  if (!d) return null;
+  const pp = d.precipitation_probability_max || [];
+  const ps = d.precipitation_sum || [];
+  const rainSoon = (pp[0] >= 50 || pp[1] >= 50) || (ps[0] >= 1 || ps[1] >= 1);
+  const sunsetISO = d.sunset && d.sunset[0];
+  return { rainSoon, sunsetISO };
 }
 
 // ---- Daily streak (a proper little widget) -----------------------------------

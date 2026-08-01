@@ -756,11 +756,18 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .wt-txt b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .wt-txt small { font-size: 12px; color: var(--text-faint); }
 .wt-open { margin: 0; }
+.wt-highlight { display: flex; align-items: center; gap: 8px; padding: 9px 12px; margin-bottom: 12px; border-radius: 10px; font-size: 13.5px; font-weight: 600; background: color-mix(in srgb, #7c7bff 20%, var(--card-bg)); border: 1px solid color-mix(in srgb, #9a8cff 55%, transparent); }
 
 /* ---- Welt-Wetter: full overlay (map + list) ---- */
 .world-overlay { padding: 6vh 12px 12px; }
 .world-card { max-width: 560px; display: flex; flex-direction: column; max-height: 88vh; }
-.world-map { height: 300px; flex: 0 0 auto; background: #1b2436; }
+.world-banner { display: flex; align-items: flex-start; gap: 9px; padding: 10px 14px; font-size: 13px; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.08); flex: 0 0 auto; }
+.world-banner .wb-ic { font-size: 16px; flex: 0 0 auto; }
+.world-banner .wb-tx b { font-weight: 700; }
+.world-banner.banner-calm { color: var(--text-dim); background: rgba(255,255,255,0.03); }
+.world-banner.banner-alert { color: #fff; background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.world-banner.banner-alert .wb-ic { filter: none; }
+.world-map { height: 288px; flex: 0 0 auto; background: #1b2436; }
 .world-map .leaflet-container { background: #1b2436; font-family: var(--font); }
 .world-map .leaflet-control-attribution { background: rgba(20,30,50,0.6); color: rgba(255,255,255,0.7); font-size: 9px; }
 .world-map .leaflet-control-attribution a { color: rgba(255,255,255,0.85); }
@@ -778,6 +785,7 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .wl-txt { flex: 1; display: flex; flex-direction: column; min-width: 0; }
 .wl-txt b { font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wl-txt small { font-size: 12px; color: var(--text-faint); }
+.wl-tsu { font-size: 11px; font-weight: 700; color: #ffd479; white-space: nowrap; }
 .wl-src { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
 .world-empty, .world-list .world-skeleton, .world-list .world-error { padding: 22px 16px; text-align: center; }
 .world-attrib { padding: 8px 14px 12px; text-align: center; font-size: .68rem; color: var(--text-faint); flex: 0 0 auto; }
