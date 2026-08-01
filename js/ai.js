@@ -11,8 +11,18 @@
 
 const KEY_STORE = 'wf.ai.v1';
 const CFG_STORE = 'wf.ai.cfg.v1';
+
+// Optional shared proxy. Paste your Cloudflare Worker URL here (see
+// worker/gemini-proxy.js) to give everyone AI access WITHOUT entering a key —
+// the key stays secret in the Worker, never in this public code. Leave empty to
+// use the "bring your own key" flow. This URL is NOT a secret; it's safe to commit.
+export const AI_PROXY = '';
+
+// Google direct (own key) vs. the shared proxy (no key in the client).
 const endpoint = (model, key) =>
   `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+const proxyEndpoint = (model) =>
+  `${AI_PROXY}${AI_PROXY.includes('?') ? '&' : '?'}model=${encodeURIComponent(model)}`;
 
 // Models the user can pick. Flash tiers work on the free plan; the live web
 // search (grounding) has its own, smaller free quota — hence the toggle.
@@ -47,6 +57,8 @@ export function clearAIKey() {
   try { localStorage.removeItem(KEY_STORE); } catch { /* private mode */ }
 }
 export function hasAIKey() { return !!loadAIKey(); }
+// AI is usable if there's a shared proxy OR the user entered their own key.
+export function hasAI() { return !!AI_PROXY || hasAIKey(); }
 
 // ---- Conversation memory (local only) ---------------------------------------
 // The chat is kept on this device so follow-ups ("and why?", "and tomorrow?")
@@ -146,8 +158,8 @@ function topicGuidance(tp, lang) {
 // Ask Gemini. Returns { text, sources, topic }. Throws an Error whose .message
 // is one of: 'no-key' | 'network' | 'bad-key' | 'quota' | 'empty' | 'http-<code>'.
 export async function askFuxxAI({ question, context = '', history = [], lang = 'de' }) {
-  const key = loadAIKey();
-  if (!key) throw new Error('no-key');
+  const key = loadAIKey();               // the user's own key, if any
+  if (!key && !AI_PROXY) throw new Error('no-key');
   const cfg = loadAICfg();
 
   const contents = [];
@@ -171,11 +183,13 @@ export async function askFuxxAI({ question, context = '', history = [], lang = '
   // usual reason a fresh key hits "limit reached". So: try with it when enabled,
   // and if that specific call is rate-limited, fall back to a plain (un-grounded)
   // answer once instead of failing outright.
+  // Own key → Google direct; otherwise the shared proxy (key stays server-side).
+  const target = key ? endpoint(cfg.model, key) : proxyEndpoint(cfg.model);
   const call = async (useSearch) => {
     const body = useSearch ? { ...baseBody, tools: [{ google_search: {} }] } : baseBody;
     let res;
     try {
-      res = await fetch(endpoint(cfg.model, key), {
+      res = await fetch(target, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
     } catch { throw new Error('network'); }
