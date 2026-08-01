@@ -72,308 +72,58 @@ function renderHero(data, s) {
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
 }
 
-// ---- "Frag den Fuchs" — the app answers free-typed questions, offline --------
-// Maps a natural question to an intent, then answers with a verdict + best time
-// window + a short reason, reusing the existing scoring engine. No server, no AI
-// service — pure on-device keyword intent matching. This is the differentiator:
-// a weather app you can actually *ask*.
-const FOX_INTENTS = [
-  { key: 'run', emoji: '🏃', de: 'Joggen', en: 'Jogging', kw: ['jogg', 'joggen', 'laufen', 'rennen', 'lauf', 'run', 'jog'], fn: sportScore, type: 'window' },
-  { key: 'walk', emoji: '🚶', de: 'Spazieren', en: 'A walk', kw: ['spazier', 'gassi', 'walk', 'rausgeh', 'draußen', 'spaziergang', 'hund'], fn: outdoorScore, type: 'window' },
-  { key: 'bike', emoji: '🚴', de: 'Radfahren', en: 'Cycling', kw: ['rad', 'fahrrad', 'bike', 'cycl', 'velo', 'radel'], fn: bikeScore, type: 'window' },
-  { key: 'grill', emoji: '🔥', de: 'Grillen', en: 'Barbecue', kw: ['grill', 'bbq', 'barbec'], fn: grillScore, type: 'window' },
-  { key: 'swim', emoji: '🏊', de: 'Baden', en: 'Swimming', kw: ['bad', 'schwimm', 'swim', 'freibad', 'see'], fn: swimScore, type: 'window' },
-  { key: 'garden', emoji: '🌱', de: 'Garten', en: 'Gardening', kw: ['garten', 'garden', 'pflanz', 'beet', 'rasen'], fn: gardenScore, type: 'window' },
-  { key: 'photo', emoji: '📸', de: 'Fotografieren', en: 'Photos', kw: ['foto', 'photo', 'bild', 'kamera'], fn: photoScore, type: 'window' },
-  { key: 'laundry', emoji: '🧺', de: 'Wäsche trocknen', en: 'Drying laundry', kw: ['wäsche', 'waschen', 'trocknen', 'laundry', 'washing', 'leine', 'aufhäng'], fn: laundryScore, type: 'window' },
-  { key: 'air', emoji: '🪟', de: 'Lüften', en: 'Airing out', kw: ['lüft', 'lueft', 'fenster', 'durchzug', 'air out', 'ventilat'], fn: airOutScore, type: 'window' },
-  { key: 'umbrella', emoji: '☂️', de: 'Schirm', en: 'Umbrella', kw: ['schirm', 'regen', 'umbrella', 'rain', 'nass', 'regnet'], type: 'umbrella' },
-  { key: 'jacket', emoji: '🧥', de: 'Jacke', en: 'Jacket', kw: ['jacke', 'jacket', 'kalt', 'frier', 'coat', 'warm anzieh'], type: 'jacket' },
-  { key: 'frost', emoji: '❄️', de: 'Frost / Auto kratzen', en: 'Frost / scrape car', kw: ['frost', 'kratzen', 'auto', 'scheibe', 'glätte', 'scrape', 'eis'], type: 'frost' },
-  { key: 'sun', emoji: '🧴', de: 'Sonnencreme', en: 'Sunscreen', kw: ['creme', 'sonnencreme', 'sunscreen', 'sonnenschutz', 'eincrem'], type: 'sun' },
-];
-
-// Full weekday names (index 0 = Sunday, to match getUTCDay) — used both to
-// recognise a weekday in the question and to phrase the answer.
-const FOX_WD = {
-  de: ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'],
-  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
-};
-// Keyword fragments that map to a weekday index. Full names only — abbreviations
-// like "mo"/"di" would collide with ordinary words. "sonnabend" = Saturday (DE).
-const FOX_WD_KW = [
-  { i: 1, kw: ['montag', 'monday'] },
-  { i: 2, kw: ['dienstag', 'tuesday'] },
-  { i: 3, kw: ['mittwoch', 'wednesday'] },
-  { i: 4, kw: ['donnerstag', 'thursday'] },
-  { i: 5, kw: ['freitag', 'friday'] },
-  { i: 6, kw: ['samstag', 'sonnabend', 'saturday'] },
-  { i: 0, kw: ['sonntag', 'sunday'] },
-];
-
-// The place's weekday right now (0 = Sunday), in the same UTC-shifted space
-// that dayHoursOf() uses, so day offsets line up with the forecast buckets.
-function foxTodayWd() { return new Date(placeNowMs()).getUTCDay(); }
-
-// Parse a day reference out of the (lowercased) question. Returns
-//   { offsets, label, far }   — offsets are day numbers (0 = today),
-//   { far: true }             — asked beyond the forecast horizon → we say so,
-//   null                      — no day mentioned; caller uses its default.
-// `horizon` is how many days of forecast we actually have.
-function foxParseDay(norm, horizon) {
-  const en = getLang() === 'en';
-  const today = foxTodayWd();
-  const nextWd = (target) => (target - today + 7) % 7;   // 0 = today counts
-  const clamp = (offs) => offs.filter((o) => o >= 0 && o < horizon);
-  const has = (...w) => w.some((x) => norm.includes(x));
-
-  // Clearly beyond the forecast — answer honestly instead of guessing.
-  if (has('nächsten monat', 'naechsten monat', 'nächster monat', 'next month', 'nächstes jahr', 'next year')) return { far: true };
-
-  // "in N Tagen" / "in N days" — real day arithmetic, honest when out of range.
-  const inDays = norm.match(/in\s+(\d{1,3})\s*(tag|tage|tagen|day|days)/);
-  if (inDays) {
-    const n = parseInt(inDays[1], 10);
-    return (n >= horizon) ? { far: true } : { offsets: [n], label: foxDayLabel(n, en) };
-  }
-
-  // Explicit relative days (check the longer word first).
-  if (has('übermorgen', 'day after tomorrow')) return foxDayRef([2], horizon, en);
-  if (has('morgen', 'tomorrow')) return foxDayRef([1], horizon, en);
-  if (has('heute', 'today', 'jetzt', ' now', 'right now', 'gerade')) return { offsets: [0], label: '' };
-
-  // Weekend — the coming Saturday + Sunday (plus today if it's already a weekend day).
-  if (has('wochenende', 'weekend')) {
-    const set = new Set([nextWd(6), nextWd(6) + 1]);
-    if (today === 0 || today === 6) set.add(0);
-    return foxDayRef(clamp([...set]).sort((a, b) => a - b), horizon, en, en ? 'this weekend' : 'am Wochenende');
-  }
-  // "next week" before a bare weekday, so "next monday" resolves correctly.
-  if (has('nächste woche', 'naechste woche', 'next week')) {
-    return foxDayRef(clamp([7, 8, 9, 10, 11, 12, 13]), horizon, en, en ? 'next week' : 'nächste Woche');
-  }
-  if (has('diese woche', 'this week')) {
-    return foxDayRef(clamp([0, 1, 2, 3, 4, 5, 6]), horizon, en, en ? 'this week' : 'diese Woche');
-  }
-  // A named weekday → its next occurrence (today counts).
-  for (const w of FOX_WD_KW) {
-    if (w.kw.some((k) => norm.includes(k))) {
-      let off = nextWd(w.i);
-      if (norm.includes('nächst') || norm.includes('next')) off += (off === 0 ? 7 : 0);
-      return foxDayRef([off], horizon, en);
-    }
-  }
-  return null;
-}
-// Wrap a set of offsets, flagging when everything asked for is past the horizon.
-function foxDayRef(offsets, horizon, en, label) {
-  const ok = offsets.filter((o) => o >= 0 && o < horizon);
-  if (!ok.length) return { far: true };
-  return { offsets: ok, label: label != null ? label : foxDayLabel(ok[0], en) };
-}
-// Human label for a single day offset: "", "morgen", "übermorgen", "am Samstag".
-function foxDayLabel(off, en) {
-  if (off <= 0) return '';
-  if (off === 1) return en ? 'tomorrow' : 'morgen';
-  if (off === 2) return en ? 'the day after' : 'übermorgen';
-  const wd = new Date(placeNowMs() + off * 86400000).getUTCDay();
-  return (en ? 'on ' : 'am ') + (en ? FOX_WD.en : FOX_WD.de)[wd];
-}
-
-// Build the time-window phrase, e.g. "am Samstag 09–14 Uhr" / "tomorrow all day".
-function foxWinTxt(win, dayLbl, en) {
-  if (!win) return dayLbl;
-  const pre = dayLbl ? dayLbl + ' ' : '';
-  if (win.allDay) return (pre + (en ? 'all day' : 'praktisch ganztags')).trim();
-  return `${pre}${win.from}–${win.to}${en ? '' : ' Uhr'}`;
-}
-
-// One short reason why a window activity is off, picked from the dominant factor.
-function foxWhy(hours, en) {
-  const wet = hours.some((x) => x.prob >= 50 || x.precip > 0.2);
-  const maxFeels = Math.max(...hours.map((x) => x.feels));
-  const minFeels = Math.min(...hours.map((x) => x.feels));
-  const gusty = Math.max(...hours.map((x) => x.gust)) >= 45;
-  if (wet) return en ? 'too wet' : 'zu nass';
-  if (maxFeels < 8) return en ? 'too cold' : 'zu kalt';
-  if (minFeels > 28) return en ? 'too hot' : 'zu heiß';
-  if (gusty) return en ? 'too windy' : 'zu windig';
-  return en ? "conditions don't fit" : 'die Bedingungen passen nicht';
-}
-
-// Returns { emoji, label, verdict:'good'|'ok'|'bad'|'info', dot, text }
-function answerFox(q, data, s) {
-  const en = getLang() === 'en';
-  const norm = ' ' + (q || '').toLowerCase().trim() + ' ';
-  let best = null, hits = 0;
-  for (const it of FOX_INTENTS) {
-    const n = it.kw.reduce((a, k) => a + (norm.includes(k) ? 1 : 0), 0);
-    if (n > hits) { hits = n; best = it; }
-  }
-  const DOT = { good: '🟢', ok: '🟡', bad: '🔴', info: '🔵' };
-  const out = (it, verdict, text) => ({ emoji: it ? it.emoji : '🦊', label: it ? (en ? it.en : it.de) : '', verdict, dot: DOT[verdict], text });
-  if (!best) {
-    return { emoji: '🦊', label: '', verdict: 'info', dot: '🔵',
-      text: en ? "I didn't quite get that — try “jogging tomorrow?”, “laundry at the weekend?”, “barbecue on Saturday?” or “umbrella?”."
-        : 'Das habe ich nicht ganz verstanden – frag z. B. „joggen morgen?", „Wäsche am Wochenende?", „grillen am Samstag?" oder „Schirm?".' };
-  }
-  const u = s.units;
-  const d = data.forecast.daily;
-  const horizon = (d && d.time) ? d.time.length : 7;
-  const day = foxParseDay(norm, horizon);
-  // Honest "I don't know" — the question points past what the forecast covers.
-  if (day && day.far) {
-    return out(best, 'info', en
-      ? `that's further out than my forecast reaches — I only see the next ${horizon} days.`
-      : `das liegt weiter in der Zukunft, als meine Vorhersage reicht – ich sehe nur die nächsten ${horizon} Tage.`);
-  }
-  // For far-out days, be upfront that it's only a rough guess.
-  const soft = (offs) => (Math.min(...offs) >= 4)
-    ? (en ? ' (still far out, so a rough guess)' : ' (noch weit hin, also grob geschätzt)') : '';
-
-  if (best.type === 'window') {
-    let hours, dayLbl;
-    if (day) {
-      // Evaluate each requested day; keep the one with the best peak score.
-      let bestPeak = -Infinity, bestOff = day.offsets[0];
-      for (const off of day.offsets) {
-        const hrs = dayHoursOf(data.forecast.hourly, u, off, off === 0);
-        if (hrs.length < 2) continue;
-        const p = Math.max(...hrs.map(best.fn));
-        if (p > bestPeak) { bestPeak = p; bestOff = off; hours = hrs; }
-      }
-      // A range (weekend/week) names the winning day; a single day keeps its label.
-      dayLbl = day.offsets.length > 1 ? foxDayLabel(bestOff, en) : day.label;
-    } else {
-      const pick = pickActivityDay(data.forecast.hourly, u);
-      hours = pick.hours;
-      dayLbl = pick.tomorrow ? (en ? 'tomorrow' : 'morgen') : '';
-    }
-    if (!hours || hours.length < 2) return out(best, 'info', en ? 'No hourly data for that yet.' : 'Dazu habe ich noch keine Stundendaten.');
-    const note = day ? soft(day.offsets) : '';
-    const peak = Math.max(...hours.map(best.fn));
-    const verdict = peak >= 68 ? 'good' : peak >= 45 ? 'ok' : 'bad';
-    const win = verdict === 'bad' ? null : bestWindow(hours, best.fn);
-    const wt = foxWinTxt(win, dayLbl, en);
-    if (verdict === 'good') return out(best, 'good', (wt ? (en ? `yes, great — best ${wt}.` : `ja, top – am besten ${wt}.`) : (en ? 'yes, great.' : 'ja, top.')) + note);
-    if (verdict === 'ok') return out(best, 'ok', (wt ? (en ? `works — best ${wt}.` : `geht – am besten ${wt}.`) : (en ? 'okay-ish.' : 'geht so.')) + note);
-    const why = foxWhy(hours, en);
-    const lead = dayLbl ? (en ? `better not ${dayLbl}` : `${dayLbl} eher nicht`) : (en ? 'better not' : 'eher nicht');
-    return out(best, 'bad', `${lead} – ${why}.` + note);
-  }
-
-  // Non-window intents. Pick the offsets to check: the parsed day(s), else today.
-  const offs = day ? day.offsets : [0];
-  const lbl = day ? day.label : '';
-  const note = day ? soft(day.offsets) : '';
-  const dnum = (arr, i) => (arr && arr[i] != null ? arr[i] : 0);
-
-  if (best.type === 'umbrella') {
-    const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
-    let worst = { need: false, pop: 0, off: offs[0] };
-    for (const o of offs) {
-      const pop = dnum(d.precipitation_probability_max, o);
-      const psum = toMmU(dnum(d.precipitation_sum, o), precipUnit);
-      const need = (pop >= 50 && psum >= 0.5) || psum >= 2;
-      if (pop > worst.pop) worst = { need, pop, off: o };
-    }
-    const when = offs.length > 1 ? foxDayLabel(worst.off, en) : lbl;
-    const w = when ? when + ' ' : '';
-    return worst.need
-      ? out(best, 'info', (en ? `yes, take one ${w}— ${Math.round(worst.pop)}% chance of rain.` : `ja, nimm einen mit ${w}– ${Math.round(worst.pop)}% Regenchance.`) + note)
-      : out(best, 'good', (en ? `no need ${w}— it stays dry.` : `nicht nötig ${w}– bleibt trocken.`) + note);
-  }
-  if (best.type === 'jacket') {
-    // Today uses the live feel; other days use that day's daytime high feel.
-    let feelsC, rawFeel;
-    if (offs.length === 1 && offs[0] === 0) {
-      rawFeel = data.forecast.current.apparent_temperature;
-      feelsC = toC(rawFeel, u.temp);
-    } else {
-      let coldest = Infinity, coldRaw = 0;
-      for (const o of offs) {
-        const raw = dnum(d.apparent_temperature_max, o);
-        const c = toC(raw, u.temp);
-        if (c < coldest) { coldest = c; coldRaw = raw; }
-      }
-      feelsC = coldest; rawFeel = coldRaw;
-    }
-    const w = lbl ? lbl + ' ' : '';
-    return feelsC < 14
-      ? out(best, 'info', (en ? `yes ${w}— it feels like ${Math.round(rawFeel)}°.` : `ja ${w}– gefühlt ${Math.round(rawFeel)}°.`) + note)
-      : out(best, 'good', (en ? `not needed ${w}— mild enough.` : `nicht nötig ${w}– mild genug.`) + note);
-  }
-  if (best.type === 'frost') {
-    // Default to tomorrow morning; otherwise the earliest requested day's morning.
-    const checkOffs = day ? offs : [1];
-    let coldest = null, coldOff = checkOffs[0];
-    for (const o of checkOffs) {
-      const am = dayHoursOf(data.forecast.hourly, u, o, false).filter((x) => x.hour >= 4 && x.hour <= 8);
-      if (!am.length) continue;
-      const m = Math.min(...am.map((x) => x.feels));
-      if (coldest == null || m < coldest) { coldest = m; coldOff = o; }
-    }
-    if (coldest == null) return out(best, 'info', en ? 'no early-morning data for that yet.' : 'dazu habe ich noch keine Frühwerte.');
-    const when = day ? (offs.length > 1 ? foxDayLabel(coldOff, en) : lbl) : (en ? 'tomorrow' : 'morgen');
-    const w = when ? when + ' ' : '';
-    return coldest <= 0
-      ? out(best, 'info', (en ? `yes ${w}— around ${Math.round(coldest)}° early, expect frost.` : `ja ${w}– früh um ${Math.round(coldest)}°, mit Frost rechnen.`) + note)
-      : out(best, 'good', (en ? `no frost expected ${w}early.` : `${w}früh kein Frost zu erwarten.`) + note);
-  }
-  if (best.type === 'sun') {
-    let uv = 0, uvOff = offs[0];
-    for (const o of offs) { const v = dnum(d.uv_index_max, o); if (v > uv) { uv = v; uvOff = o; } }
-    const when = offs.length > 1 ? foxDayLabel(uvOff, en) : lbl;
-    const w = when ? when + ' ' : '';
-    return uv >= 3
-      ? out(best, 'info', (en ? `yes ${w}— UV up to ${Math.round(uv)}.` : `ja ${w}– UV bis ${Math.round(uv)}.`) + note)
-      : out(best, 'good', (en ? `not really needed${when ? ' ' + when : ''}.` : `${w}kaum nötig.`) + note);
-  }
-  return out(best, 'info', '—');
-}
-
-// "Air out" window: dry, cool and not too humid (any hour, morning/evening win)
-function airOutScore(x) {
-  if (x.precip > 0.1 || x.prob >= 50) return 0;
-  let s = 100;
-  s -= Math.max(0, x.feels - 16) * 2.4;
-  s -= Math.max(0, x.hum - 70) * 1.3;
-  return s;
-}
-
+// ---- "Frag Wetterfux": simple at-a-glance Yes/No pills with icons ------------
+// The quick, glanceable decision card: Umbrella, Laundry, Barbecue/Jacket and
+// one contextual pill — each a plain Ja/Nein. Reuses the scoring engine; no
+// free-text input (open-ended questions live in the AI tab).
 function renderAsk(data, s) {
   const box = $('#ask');
   const en = getLang() === 'en';
-  const mascot = buildClothingAdvice(data, s).mascot;
-  const chips = [
-    { de: 'Joggen morgen?', en: 'Jogging tomorrow?' }, { de: 'Wäsche am Wochenende?', en: 'Laundry this weekend?' },
-    { de: 'Grillen am Samstag?', en: 'Barbecue on Saturday?' }, { de: 'Schirm heute?', en: 'Umbrella today?' },
-  ];
-  box.hidden = false;
-  box.innerHTML = `
-    <div class="card-title">🦊 ${en ? 'Ask the fox' : 'Frag den Fuchs'}</div>
-    <div class="fox-chat">
-      <div class="fox-ava" aria-hidden="true">${foxSVG(mascot)}</div>
-      <div class="fox-bubble" id="foxBubble">${en ? 'Ask me if something’s worth it — I get days too, like “can I jog tomorrow?” or “barbecue at the weekend?”.' : 'Frag mich, ob sich was lohnt – ich verstehe auch Tage, z. B. „Kann ich morgen joggen?" oder „Grillen am Wochenende?".'}</div>
-    </div>
-    <div class="fox-inputrow">
-      <input id="foxQ" type="text" autocomplete="off" aria-label="${en ? 'Ask the fox' : 'Frag den Fuchs'}" placeholder="${en ? 'e.g. Can I jog on Saturday?' : 'z. B. Kann ich am Samstag joggen?'}" />
-      <button id="foxAsk" aria-label="${en ? 'Ask' : 'Fragen'}">➤</button>
-    </div>
-    <div class="fox-chips">${chips.map((c) => `<button class="fox-chip">${en ? c.en : c.de}</button>`).join('')}</div>`;
+  const u = s.units;
+  const c = data.forecast.current;
+  const d = data.forecast.daily;
+  const precipUnit = u.temp === 'F' ? 'inch' : 'mm';
+  const pop = d.precipitation_probability_max ? (d.precipitation_probability_max[0] || 0) : 0;
+  const psum = toMmU(d.precipitation_sum ? (d.precipitation_sum[0] || 0) : 0, precipUnit);
+  const RAIN = [51, 53, 55, 61, 63, 65, 80, 81, 82];
+  const umbrella = (pop >= 50 && psum >= 0.5) || psum >= 2 || RAIN.includes(c.weather_code) || RAIN.includes(d.weather_code[0]);
+  const jacket = toC(c.apparent_temperature, u.temp) < 14;
+  const uv = d.uv_index_max ? (d.uv_index_max[0] || 0) : 0;
+  const cream = uv >= 3;
+  const tmax = toC(d.temperature_2m_max[0], u.temp);
+  const warm = tmax >= 18;
 
-  const inp = box.querySelector('#foxQ');
-  const bubble = box.querySelector('#foxBubble');
-  const ask = (q) => {
-    const question = (q != null ? q : inp.value).trim();
-    if (!question) return;
-    const a = answerFox(question, data, s);
-    bubble.className = 'fox-bubble v-' + a.verdict;
-    bubble.innerHTML = `${a.dot} ${a.label ? `<b>${escapeHtml(a.label)}:</b> ` : ''}${escapeHtml(a.text)}`;
-  };
-  box.querySelector('#foxAsk').addEventListener('click', () => ask());
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); ask(); } });
-  box.querySelectorAll('.fox-chip').forEach((c) => c.addEventListener('click', () => { inp.value = c.textContent; ask(c.textContent); }));
+  // Reuse the scoring engine for today's daytime hours → Ja/Nein by peak score.
+  const { hours } = pickActivityDay(data.forecast.hourly, u);
+  const peak = (fn) => (hours.length ? Math.max(...hours.map(fn)) : 0);
+  const laundryOK = peak(laundryScore) >= 50;   // dry & warm enough to hang out
+  const grillOK = peak(grillScore) >= 50;        // warm, dry grilling window
+
+  // frost potential for tomorrow morning (5–8h) → only then is "scrape" relevant
+  const tomAm = dayHoursOf(data.forecast.hourly, u, 1, false).filter((x) => x.hour >= 5 && x.hour <= 8);
+  const tomAmMin = tomAm.length ? Math.min(...tomAm.map((x) => x.feels)) : null;
+  const frostRelevant = tomAmMin != null && tomAmMin <= 3;
+
+  // Umbrella + Laundry always; then Barbecue (warm) or Jacket (cool); then one
+  // contextual pill. Simple Ja/Nein at a glance.
+  const pills = [
+    { e: '☂️', q: en ? 'Umbrella?' : 'Schirm?', a: umbrella },
+    { e: '🧺', q: en ? 'Laundry?' : 'Wäsche?', a: laundryOK },
+  ];
+  pills.push(warm
+    ? { e: '🔥', q: en ? 'Barbecue?' : 'Grillen?', a: grillOK }
+    : { e: '🧥', q: en ? 'Jacket?' : 'Jacke?', a: jacket });
+  if (cream) pills.push({ e: '🧴', q: en ? 'Sunscreen?' : 'Creme?', a: true });
+  else if (frostRelevant) pills.push({ e: '❄️', q: en ? 'Scrape (early)?' : 'Kratzen früh?', a: tomAmMin <= 0 });
+  else if (warm) pills.push({ e: '🏊', q: en ? 'Swim?' : 'Baden?', a: tmax >= 27 && pop < 40 });
+  else pills.push({ e: '😎', q: en ? 'Sunglasses?' : 'Sonnenbrille?', a: uv >= 3 });
+  const shown = pills.slice(0, 4);
+
+  box.hidden = false;
+  box.innerHTML = `<div class="card-title">🦊 ${en ? 'Ask Wetterfux' : 'Frag Wetterfux'}</div>
+    <div class="ask-row">${shown.map((p) => `<div class="ask-pill ${p.a ? 'yes' : 'no'}">
+      <span class="ask-e" aria-hidden="true">${p.e}</span><span class="ask-q">${p.q}</span>
+      <b>${p.a ? (en ? 'Yes' : 'Ja') : (en ? 'No' : 'Nein')}</b></div>`).join('')}</div>`;
 }
 
 // ---- "Frag den Fuxx — KI": opt-in AI mode (Google Gemini) --------------------
