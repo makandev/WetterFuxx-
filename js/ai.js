@@ -62,8 +62,50 @@ function extractSources(cand) {
   return out;
 }
 
-// Ask Gemini. Returns { text, sources }. Throws an Error whose .message is one
-// of: 'no-key' | 'network' | 'bad-key' | 'quota' | 'empty' | 'http-<code>'.
+// ---- Topic profiles: steer each subject to authoritative sources ------------
+// So the model grounds answers in trustworthy, official/scientific places
+// instead of random pages — and is told to admit uncertainty rather than guess.
+const TOPIC_PROFILES = [
+  { key: 'spaceweather', de: 'Weltraumwetter', en: 'space weather',
+    kw: ['aurora', 'polarlicht', 'nordlicht', 'sonnensturm', 'solar storm', 'space weather', 'weltraumwetter', 'sonnenwind', 'solar wind', 'geomagnet', 'kp-index', 'kp index', 'flare', 'sonneneruption', 'cme'],
+    sources: ['swpc.noaa.gov', 'nasa.gov', 'esa.int', 'spaceweatherlive.com'] },
+  { key: 'astronomy', de: 'Astronomie & Universum', en: 'astronomy & the universe',
+    kw: ['universum', 'universe', 'stern', 'sterne', 'star', 'planet', 'mond', 'moon', 'komet', 'comet', 'sternschnuppe', 'meteor', 'galaxie', 'galaxy', 'astronom', 'weltall', 'weltraum', 'sonnensystem', 'solar system', 'eclipse', 'finsternis', 'iss', 'schwarzes loch', 'black hole', 'urknall', 'big bang'],
+    sources: ['nasa.gov', 'esa.int', 'timeanddate.com', 'in-the-sky.org'] },
+  { key: 'weather', de: 'Wetter', en: 'weather',
+    kw: ['wetter', 'weather', 'regen', 'rain', 'sturm', 'storm', 'gewitter', 'thunder', 'blitz', 'lightning', 'schnee', 'snow', 'hitze', 'heat', 'wind', 'vorhersage', 'forecast', 'hurrikan', 'hurricane', 'tornado', 'nebel', 'fog', 'hagel', 'hail'],
+    sources: ['dwd.de', 'noaa.gov', 'weather.gov', 'metoffice.gov.uk', 'open-meteo.com'] },
+  { key: 'climate', de: 'Klima', en: 'climate',
+    kw: ['klima', 'climate', 'erderwärmung', 'global warming', 'treibhaus', 'greenhouse', 'co2', 'klimawandel', 'climate change'],
+    sources: ['ipcc.ch', 'climate.nasa.gov', 'climate.copernicus.eu', 'noaa.gov'] },
+  { key: 'nature', de: 'Natur & Erde', en: 'nature & earth',
+    kw: ['tier', 'animal', 'pflanze', 'plant', 'vogel', 'bird', 'insekt', 'insect', 'baum', 'tree', 'natur', 'nature', 'ozean', 'ocean', 'meer', 'vulkan', 'volcano', 'erdbeben', 'earthquake', 'fluss', 'river'],
+    sources: ['nationalgeographic.com', 'si.edu', 'usgs.gov', 'nasa.gov'] },
+];
+function topicFor(q) {
+  const norm = ' ' + (q || '').toLowerCase() + ' ';
+  let best = null, hits = 0;
+  for (const tp of TOPIC_PROFILES) {
+    const n = tp.kw.reduce((a, k) => a + (norm.includes(k) ? 1 : 0), 0);
+    if (n > hits) { hits = n; best = tp; }
+  }
+  return best;
+}
+// Reliability instruction (always) + per-topic trusted-source steering.
+function topicGuidance(tp, lang) {
+  const de = lang !== 'en';
+  const base = de
+    ? 'Verlässlichkeit geht vor. Stütze jede sachliche Aussage per Google-Suche auf verlässliche, offizielle oder wissenschaftliche Quellen. Wenn du etwas nicht sicher aus einer verlässlichen Quelle belegen kannst, sage das ehrlich – rate nicht und gib nichts Unsicheres als Fakt aus.'
+    : 'Reliability first. Ground every factual claim via Google Search in reliable, official or scientific sources. If you cannot verify something from a reliable source, say so honestly — do not guess or present uncertain information as fact.';
+  if (!tp) return base;
+  const src = tp.sources.join(', ');
+  return de
+    ? `${base} Thema: ${tp.de}. Bevorzuge maßgebliche Quellen wie ${src} (oder vergleichbar seriöse) und meide Foren, Werbe- oder Fake-Seiten.`
+    : `${base} Topic: ${tp.en}. Prefer authoritative sources such as ${src} (or comparably reputable ones) and avoid forums, ad or fake pages.`;
+}
+
+// Ask Gemini. Returns { text, sources, topic }. Throws an Error whose .message
+// is one of: 'no-key' | 'network' | 'bad-key' | 'quota' | 'empty' | 'http-<code>'.
 export async function askFuxxAI({ question, context = '', history = [], lang = 'de' }) {
   const key = loadAIKey();
   if (!key) throw new Error('no-key');
@@ -77,11 +119,13 @@ export async function askFuxxAI({ question, context = '', history = [], lang = '
   const userText = context ? `${context}\n\n${question}` : question;
   contents.push({ role: 'user', parts: [{ text: userText }] });
 
+  const tp = topicFor(question);
   const body = {
-    systemInstruction: { parts: [{ text: systemPrompt(lang) }] },
+    systemInstruction: { parts: [{ text: systemPrompt(lang) }, { text: topicGuidance(tp, lang) }] },
     contents,
     tools: [{ google_search: {} }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 800 },
+    // Lower temperature keeps factual answers close to the sources.
+    generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
   };
 
   let res;
@@ -102,5 +146,5 @@ export async function askFuxxAI({ question, context = '', history = [], lang = '
   const parts = (cand && cand.content && cand.content.parts) || [];
   const text = parts.map((p) => p.text || '').join('').trim();
   if (!text) throw new Error('empty');
-  return { text, sources: extractSources(cand) };
+  return { text, sources: extractSources(cand), topic: tp ? (lang === 'en' ? tp.en : tp.de) : '' };
 }

@@ -458,7 +458,7 @@ function renderAskAI(data, s) {
     : ['Warum blitzt es?', 'Wann sehe ich Sternschnuppen?', 'Erkläre Regenbögen'];
   const msgs = aiHistory.map((m) => m.role === 'user'
     ? `<div class="ai-msg ai-user">${escapeHtml(m.text)}</div>`
-    : `<div class="ai-msg ai-bot"><div class="ai-ava" aria-hidden="true">${foxSVG(mascot)}</div><div class="ai-bubble">${aiFormat(m.text)}${aiSourcesHTML(m.sources, en)}</div></div>`).join('');
+    : `<div class="ai-msg ai-bot"><div class="ai-ava" aria-hidden="true">${foxSVG(mascot)}</div><div class="ai-bubble">${m.topic ? `<span class="ai-topic">${en ? 'Topic' : 'Thema'}: ${escapeHtml(m.topic)}</span>` : ''}${aiFormat(m.text)}${aiSourcesHTML(m.sources, en)}</div></div>`).join('');
   const thinking = aiBusy
     ? `<div class="ai-msg ai-bot"><div class="ai-ava" aria-hidden="true">${foxSVG(mascot)}</div><div class="ai-bubble ai-thinking"><span></span><span></span><span></span></div></div>`
     : '';
@@ -486,11 +486,11 @@ function renderAskAI(data, s) {
     renderAskAI(data, s);
     try {
       const prior = aiHistory.slice(0, -1);
-      const { text, sources } = await askFuxxAI({
+      const { text, sources, topic } = await askFuxxAI({
         question, context: aiWeatherContext(data), history: prior,
         lang: en ? 'en' : 'de',
       });
-      aiHistory.push({ role: 'ai', text, sources });
+      aiHistory.push({ role: 'ai', text, sources, topic });
     } catch (e) {
       aiError = (e && e.message) || 'error';
     } finally {
