@@ -767,7 +767,10 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .world-banner.banner-calm { color: var(--text-dim); background: rgba(255,255,255,0.03); }
 .world-banner.banner-alert { color: #fff; background: color-mix(in srgb, var(--accent) 16%, transparent); }
 .world-banner.banner-alert .wb-ic { filter: none; }
-.world-map { height: 288px; flex: 0 0 auto; background: #1b2436; }
+.world-map { height: 260px; flex: 0 0 auto; background: #1b2436; }
+/* Short viewports: shrink the map so the event list keeps usable room */
+@media (max-height: 720px) { .world-map { height: 190px; } }
+@media (max-height: 560px) { .world-map { height: 150px; } }
 .world-map .leaflet-container { background: #1b2436; font-family: var(--font); }
 .world-map .leaflet-control-attribution { background: rgba(20,30,50,0.6); color: rgba(255,255,255,0.7); font-size: 9px; }
 .world-map .leaflet-control-attribution a { color: rgba(255,255,255,0.85); }
@@ -779,7 +782,7 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 .wfilter { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--card-brd); background: rgba(255,255,255,0.06); color: #fff; font-size: 13px; font-family: inherit; cursor: pointer; }
 .wfilter.on { background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.4); }
 .wf-n { font-size: 11px; color: var(--text-dim); }
-.world-list { overflow-y: auto; padding: 6px 6px 4px; }
+.world-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 6px 6px 4px; }
 .wl-row { display: flex; align-items: center; gap: 12px; padding: 11px 12px; border-radius: var(--radius-sm); text-decoration: none; color: #fff; }
 .wl-row:hover { background: rgba(255,255,255,0.07); }
 .wl-txt { flex: 1; display: flex; flex-direction: column; min-width: 0; }

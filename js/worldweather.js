@@ -30,8 +30,10 @@ const CAT2KIND = {
 const kindLabel = (k) => (getLang() === 'en' ? KINDS[k].en : KINDS[k].de);
 
 // ---- Data --------------------------------------------------------------------
-let cache = null; // last successful merged list
+const TTL = 15 * 60 * 1000; // refresh world / space / air data at most every 15 min
+let cache = null; let cacheAt = 0; // last successful merged event list
 let activeFilter = 'all';
+const safeUrl = (u) => (/^https?:\/\//i.test(String(u || '')) ? String(u) : '#');
 
 function fromEonet(json) {
   return (json.events || []).map((ev) => {
@@ -85,56 +87,65 @@ async function loadEvents() {
 //   Kp < 5 → quiet;  Kp 5 (G1) → fringe/far north;  Kp ≥ 6 (G2+) → possible.
 let spaceCache = null;
 async function loadSpace() {
-  if (spaceCache) return spaceCache;
+  if (spaceCache && Date.now() - spaceCache.at < TTL) return spaceCache.val;
   const rows = await fetch(SWPC_KP).then((r) => r.json());
   let kp = null;
   for (let i = rows.length - 1; i >= 1; i--) {
     const v = parseFloat(rows[i][1]);
     if (Number.isFinite(v)) { kp = v; break; }
   }
-  spaceCache = kp == null ? null : { kp, k: Math.round(kp), aurora: kp >= 5, strong: kp >= 6 };
-  return spaceCache;
+  // Gate the wording on the SAME rounded value we display, so text and Kp agree.
+  const k = kp == null ? null : Math.round(kp);
+  const val = k == null ? null : { kp, k, aurora: k >= 5, strong: k >= 6 };
+  spaceCache = { at: Date.now(), val };
+  return val;
 }
+// Only surface space weather when aurora can actually matter — a "calm" bar every
+// time is just noise (and steals room from the event list). Kp 5 = far north only,
+// Kp ≥ 6 = a chance further south. We never promise "tonight" from a nowcast.
 function spaceText(s) {
-  if (!s) return null;
-  const k = s.k;
-  if (!s.aurora) return { tone: 'calm', text: t('spaceQuiet').replace('{n}', k) };
-  const key = s.strong ? 'spaceStorm' : 'spaceG1';
-  return { tone: 'alert', text: t(key).replace('{n}', k) };
+  if (!s || !s.aurora) return null;
+  return { tone: 'alert', text: t(s.strong ? 'spaceStorm' : 'spaceG1').replace('{n}', s.k) };
 }
 
 // ---- Local air relevance: "does a far-away event reach OUR air?" -------------
 // Uses the same Open-Meteo family already in the app. Reports what is measured/
 // modelled at home — never claims a specific fire's smoke "will arrive".
 let airCache = {};
+// European AQI bands (EEA cutoffs 0-20-40-60-80-100). Computed at RENDER time so
+// the label always matches the current UI language (never cached localized).
 function aqiBand(aqi) {
   if (!Number.isFinite(aqi)) return null;
   const en = getLang() === 'en';
   if (aqi < 20) return en ? 'good' : 'gut';
   if (aqi < 40) return en ? 'fair' : 'mäßig';
-  if (aqi < 60) return en ? 'moderate' : 'ordentlich';
+  if (aqi < 60) return en ? 'moderate' : 'mittelmäßig';
   if (aqi < 80) return en ? 'poor' : 'schlecht';
   if (aqi < 100) return en ? 'very poor' : 'sehr schlecht';
-  return en ? 'extreme' : 'extrem';
+  return en ? 'extremely poor' : 'extrem schlecht';
 }
 async function loadAir(place) {
   const key = place.lat.toFixed(2) + ',' + place.lon.toFixed(2);
-  if (airCache[key]) return airCache[key];
+  const hit = airCache[key];
+  if (hit && Date.now() - hit.at < TTL) return hit.val;
   const url = `${AQ}?latitude=${place.lat}&longitude=${place.lon}`
     + '&current=pm2_5,pm10,dust,aerosol_optical_depth,european_aqi&timezone=auto';
   const d = await fetch(url).then((r) => r.json());
   const c = (d && d.current) || {};
   const aqi = c.european_aqi;
-  const dust = c.dust;
-  const info = {
-    aqi, dust, pm25: c.pm2_5,
-    dustHigh: Number.isFinite(dust) && dust >= 15,
+  const dust = c.dust;             // surface dust µg/m³
+  const aod = c.aerosol_optical_depth; // column haze — the honest predictor of visible sky effects
+  const val = {
+    hasData: Number.isFinite(aqi) || Number.isFinite(dust),
+    aqi, dust, aod, pm25: c.pm2_5,
+    dustPresent: Number.isFinite(dust) && dust >= 15,
+    // Only claim a VISIBLE effect when the column is genuinely loaded.
+    dustVisible: (Number.isFinite(aod) && aod >= 0.4) || (Number.isFinite(dust) && dust >= 30),
     hazy: Number.isFinite(aqi) && aqi >= 60,
-    band: aqiBand(aqi),
   };
-  info.affected = info.dustHigh || info.hazy;
-  airCache[key] = info;
-  return info;
+  val.affected = val.dustPresent || val.hazy;
+  airCache[key] = { at: Date.now(), val };
+  return val;
 }
 
 // ---- Small helpers -----------------------------------------------------------
@@ -169,7 +180,7 @@ export async function renderWorldTeaser() {
       loadEvents(),
       loadSpace().catch(() => null),
     ]);
-    cache = events;
+    cache = events; cacheAt = Date.now();
     const top = events.slice(0, 3);
     const rows = top.map((e) => {
       const k = KINDS[e.kind];
@@ -234,7 +245,7 @@ function drawMarkers(events) {
     const m = window.L.marker([e.lat, e.lon], { icon: pinIcon(e) }).addTo(map);
     const tsu = e.tsunami ? `<br>⚠️ ${esc(t('tsunamiFlag'))}` : '';
     m.bindPopup(`<b>${esc(shortTitle(e))}</b><br>${esc(kindLabel(e.kind))}${e.mag ? ' · ' + esc(e.mag) : ''}${tsu}` +
-      `<br><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.source)} ↗</a>`);
+      `<br><a href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">${esc(e.source)} ↗</a>`);
     markers.push(m);
   });
 }
@@ -262,7 +273,7 @@ function renderList(events) {
   box.innerHTML = shown.map((e) => {
     const k = KINDS[e.kind];
     const when = ago(e.time);
-    return `<a class="wl-row" href="${esc(e.url)}" target="_blank" rel="noopener">
+    return `<a class="wl-row" href="${esc(safeUrl(e.url))}" target="_blank" rel="noopener">
       <span class="wl-ic" style="--wp:${k.color}">${k.emoji}</span>
       <span class="wl-txt">
         <b>${esc(shortTitle(e))}${e.tsunami ? ' <span class="wl-tsu">⚠️ ' + esc(t('tsunamiFlag')) + '</span>' : ''}</b>
@@ -282,13 +293,13 @@ function paint(events) {
 
 async function ensureData() {
   const list = document.getElementById('worldList');
-  if (cache) { paint(cache); return; }
-  if (list) list.innerHTML = `<div class="world-skeleton">${esc(t('worldLoading'))}</div>`;
+  if (cache && Date.now() - cacheAt < TTL) { paint(cache); return; }
+  if (list && !cache) list.innerHTML = `<div class="world-skeleton">${esc(t('worldLoading'))}</div>`;
   try {
-    cache = await loadEvents();
+    cache = await loadEvents(); cacheAt = Date.now();
     paint(cache);
   } catch {
-    if (list) list.innerHTML = `<div class="world-error">${esc(t('worldError'))}</div>`;
+    if (list && !cache) list.innerHTML = `<div class="world-error">${esc(t('worldError'))}</div>`;
   }
 }
 
@@ -308,36 +319,53 @@ async function renderSpaceBanner() {
 async function renderAffectBanner(place, ctx) {
   const el = document.getElementById('worldAffect');
   if (!el) return;
-  if (!place || !Number.isFinite(place.lat)) { el.hidden = true; return; }
+  const en = getLang() === 'en';
+  const banner = (tone, ic, body) => {
+    el.hidden = false;
+    el.className = 'world-banner banner-' + tone;
+    el.innerHTML = `<span class="wb-ic">${ic}</span><span class="wb-tx"><b>${esc(t('affectTitle'))}</b> ${esc(body)}</span>`;
+  };
+  if (!place || !Number.isFinite(place.lat)) {
+    // No saved place yet → a gentle hint instead of a silently missing banner.
+    banner('calm', '🏠', en ? 'Save a place to see whether it reaches your air.' : 'Ort speichern, um zu sehen, ob es eure Luft betrifft.');
+    return;
+  }
   try {
     const air = await loadAir(place);
-    const en = getLang() === 'en';
+    if (!air.hasData) { el.hidden = true; return; } // no reading → say nothing, don't show "–"
     const name = place.name || (en ? 'your place' : 'deinem Ort');
-    let msg = `${en ? 'Air over' : 'Luft über'} ${name}: ${air.band || '–'}`
+    const band = aqiBand(air.aqi);
+    const head = `${en ? 'Air over' : 'Luft über'} ${name}: ${band || '–'}`
       + (Number.isFinite(air.aqi) ? ` (${Math.round(air.aqi)} EU-AQI)` : '');
     const extras = [];
-    if (air.dustHigh) {
+    if (air.dustPresent) {
       extras.push(en ? 'Saharan dust aloft' : 'Saharastaub in der Luft');
-      if (ctx && ctx.rainSoon) extras.push(en ? 'blood rain possible' : 'Blutregen möglich');
-      else if (ctx && ctx.sunsetISO) extras.push((en ? 'reddish sunset ~' : 'rötlicher Sonnenuntergang ~') + ctx.sunsetISO.slice(11, 16));
+      // Visible-sky claims only when the column is genuinely loaded — and always hedged.
+      if (air.dustVisible) {
+        if (ctx && ctx.rainSoon) extras.push(en ? 'rain may wash down reddish dust' : 'Regen kann Staub rötlich abwaschen');
+        else if (ctx && ctx.sunsetISO) extras.push((en ? 'sunset may look reddish ~' : 'evtl. rötlicher Sonnenuntergang ~') + ctx.sunsetISO.slice(11, 16) + (en ? ' (if clear)' : ', bei klarem Himmel'));
+      }
     } else if (air.hazy) {
       extras.push(en ? 'a bit hazy (fine dust)' : 'etwas diesig durch Feinstaub');
     }
-    const tail = extras.length ? ' · ' + extras.join(' · ') : (en ? ' · no far-off effect right now' : ' · keine Fernwirkung spürbar');
-    el.hidden = false;
-    el.className = 'world-banner banner-' + (air.affected ? 'alert' : 'calm');
-    el.innerHTML = `<span class="wb-ic">${air.affected ? '🌫️' : '🏠'}</span>`
-      + `<span class="wb-tx"><b>${esc(t('affectTitle'))}</b> ${esc(msg + tail)}</span>`;
+    // Describe what was measured — never assert a causal "all clear" we didn't test.
+    const tail = extras.length ? ' · ' + extras.join(' · ')
+      : (en ? ' · local air looks normal right now' : ' · Luft bei dir aktuell unauffällig');
+    banner(air.affected ? 'alert' : 'calm', air.affected ? '🌫️' : '🏠', head + tail);
   } catch { el.hidden = true; }
 }
 
+let lastFocus = null;
 export function openWorld(place, ctx) {
   const ov = document.getElementById('worldOverlay');
   if (!ov) return;
+  lastFocus = document.activeElement;
   ov.classList.add('open');
   activeFilter = 'all';
   renderSpaceBanner();
   renderAffectBanner(place, ctx);
+  const close = document.getElementById('worldClose');
+  if (close) setTimeout(() => close.focus(), 40); // move focus into the dialog
   // Leaflet needs the container laid out before it can measure itself.
   setTimeout(() => { initMap(); if (map) map.invalidateSize(); ensureData(); }, 60);
 }
@@ -345,4 +373,5 @@ export function openWorld(place, ctx) {
 export function closeWorld() {
   const ov = document.getElementById('worldOverlay');
   if (ov) ov.classList.remove('open');
+  if (lastFocus && lastFocus.focus) { lastFocus.focus(); lastFocus = null; } // restore focus
 }
