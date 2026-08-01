@@ -6,7 +6,7 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
-import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI } from './ai.js';
+import { hasAIKey, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat } from './ai.js';
 import {
   loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
   loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
@@ -383,9 +383,10 @@ function renderAsk(data, s) {
 // their own key. The deterministic fox above and the forecast keep working
 // without it. Conversation state lives in module scope so a data refresh
 // (which re-renders the card) doesn't wipe an ongoing chat.
-let aiHistory = [];
+let aiHistory = loadChat(); // restored from this device so the chat persists
 let aiBusy = false;
 let aiError = '';
+let aiDraft = ''; // a failed question, put back into the box so it isn't lost
 
 // Compact, factual snapshot of the app's own numbers — handed to the model so
 // it answers forecast questions from real data instead of inventing them.
@@ -466,6 +467,7 @@ function renderAskAI(data, s) {
   const empty = `<p class="ai-empty">${en ? 'Ask me anything about the world outside 🌍' : 'Frag mich alles über die Welt da draußen 🌍'}</p>`;
   box.innerHTML = `
     <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
+      ${aiHistory.length ? `<button class="ai-new-btn" aria-label="${en ? 'New conversation' : 'Neues Gespräch'}" title="${en ? 'New conversation' : 'Neues Gespräch'}">🗑️</button>` : ''}
       <button class="ai-key-btn" aria-label="${en ? 'API key settings' : 'Schlüssel-Einstellungen'}" title="${en ? 'API key' : 'Schlüssel'}">🔑</button></div>
     <div class="ai-thread" id="aiThread">${(msgs || empty) + thinking + errHTML}</div>
     <div class="fox-inputrow">
@@ -483,31 +485,44 @@ function renderAskAI(data, s) {
     if (!question || aiBusy) return;
     aiHistory.push({ role: 'user', text: question });
     aiBusy = true; aiError = '';
+    saveChat(aiHistory);
     renderAskAI(data, s);
     try {
+      // Send the recent turns so follow-ups keep context, but cap it to stay
+      // light on the free quota. Never end on a user turn (avoids two in a row).
       const prior = aiHistory.slice(0, -1);
+      while (prior.length && prior[prior.length - 1].role === 'user') prior.pop();
       const { text, sources, topic } = await askFuxxAI({
-        question, context: aiWeatherContext(data), history: prior,
+        question, context: aiWeatherContext(data), history: prior.slice(-12),
         lang: en ? 'en' : 'de',
       });
       aiHistory.push({ role: 'ai', text, sources, topic });
     } catch (e) {
       aiError = (e && e.message) || 'error';
+      aiHistory.pop();     // drop the unanswered question so memory stays clean
+      aiDraft = question;  // …but keep the text so the user can just resend
     } finally {
       aiBusy = false;
+      saveChat(aiHistory);
       renderAskAI(data, s);
     }
   };
 
   box.querySelector('#aiAsk').addEventListener('click', () => send());
   if (inp) {
+    if (aiDraft && !aiBusy) { inp.value = aiDraft; aiDraft = ''; }
     inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } });
     if (!aiBusy) inp.focus({ preventScroll: true });
   }
   box.querySelectorAll('.ai-chip').forEach((c) => c.addEventListener('click', () => send(c.textContent)));
+  const newBtn = box.querySelector('.ai-new-btn');
+  if (newBtn) newBtn.addEventListener('click', () => {
+    const msg = en ? 'Start a new conversation? This clears the current chat.' : 'Neues Gespräch starten? Der aktuelle Chat wird gelöscht.';
+    if (window.confirm(msg)) { aiHistory = []; aiError = ''; clearChat(); renderAskAI(data, s); }
+  });
   box.querySelector('.ai-key-btn').addEventListener('click', () => {
     const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
-    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; renderAskAI(data, s); }
+    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; clearChat(); renderAskAI(data, s); }
   });
 }
 

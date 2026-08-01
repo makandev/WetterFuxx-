@@ -26,6 +26,23 @@ export function clearAIKey() {
 }
 export function hasAIKey() { return !!loadAIKey(); }
 
+// ---- Conversation memory (local only) ---------------------------------------
+// The chat is kept on this device so follow-ups ("and why?", "and tomorrow?")
+// and the history survive a reload. Nothing is uploaded except to Gemini at
+// ask time. We keep the last CHAT_MAX messages.
+const CHAT_STORE = 'wf.ai.chat.v1';
+const CHAT_MAX = 24;
+export function loadChat() {
+  try { const a = JSON.parse(localStorage.getItem(CHAT_STORE) || '[]'); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+export function saveChat(history) {
+  try { localStorage.setItem(CHAT_STORE, JSON.stringify((history || []).slice(-CHAT_MAX))); } catch { /* private mode */ }
+}
+export function clearChat() {
+  try { localStorage.removeItem(CHAT_STORE); } catch { /* private mode */ }
+}
+
 function systemPrompt(lang) {
   const de = lang !== 'en';
   return de
