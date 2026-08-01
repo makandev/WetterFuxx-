@@ -1035,17 +1035,37 @@ function renderSixHour(data, s) {
 
 // ---- Hourly (48h) — combined chart: temp area + precip bars + day/night ------
 function renderHourly(data, s) {
+  const inner = hourlyChartHTML(data, s, { colW: 58, topPad: 20, chartH: 62, precipH: 20 });
+  if (inner == null) { $('#hourly').innerHTML = ''; return; }
+  $('#hourly').innerHTML = `
+    <div class="card-title has-hr">${t('hourly')} <span class="hr-legend">🌡️ <i class="lg-line"></i> ${getLang() === 'en' ? 'temp' : 'Temp.'} · 💧 <i class="lg-bar"></i> ${t('precipProb')}</span>
+      <button class="hr-expand" data-hr-expand title="${t('expand')}" aria-label="${t('expand')}">⤢</button>
+    </div>
+    ${inner}`;
+}
+
+// Larger version rendered into the expand popup (#hourlyBig).
+export function renderHourlyBig(data, s) {
+  const box = $('#hourlyBig');
+  if (!box) return;
+  const inner = hourlyChartHTML(data, s, { colW: 78, topPad: 26, chartH: 132, precipH: 34 });
+  box.innerHTML = inner == null ? '' : `<div class="hr-big">${inner}</div>`;
+}
+
+// Builds the scrollable hourly chart markup at the given pixel dimensions.
+// Returns null when there is no hourly data. Shared by the card and the popup.
+function hourlyChartHTML(data, s, dim) {
   const h = data.forecast.hourly;
   const start = currentHourIndex(h);
   const N = 48;
   const idxs = [];
   for (let i = start; i < Math.min(start + N, h.time.length); i++) idxs.push(i);
-  if (!idxs.length) { $('#hourly').innerHTML = ''; return; }
+  if (!idxs.length) return null;
   const temps = idxs.map((i) => h.temperature_2m[i]);
   const min = Math.min(...temps), max = Math.max(...temps);
   const range = Math.max(1, max - min);
 
-  const colW = 58, topPad = 20, chartH = 62, precipH = 20;
+  const { colW, topPad, chartH, precipH } = dim;
   const baseY = topPad + chartH;
   const totalH = baseY + precipH;
   const width = idxs.length * colW;
@@ -1054,8 +1074,9 @@ function renderHourly(data, s) {
   const linePath = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1].toFixed(1)}`).join(' ');
   const areaPath = `${linePath} L ${pts[pts.length - 1][0]} ${baseY} L ${pts[0][0]} ${baseY} Z`;
 
-  // Temperature-coloured gradient along the x-axis (userSpaceOnUse)
-  const gid = 'hrGrad';
+  // Temperature-coloured gradient along the x-axis (userSpaceOnUse).
+  // Keep the id unique per size so the card and the popup don't clash in the DOM.
+  const gid = 'hrGrad' + colW;
   const stops = temps.map((tp, k) =>
     `<stop offset="${((k / Math.max(1, temps.length - 1)) * 100).toFixed(2)}%" stop-color="${tempColor(toC(tp, s.units.temp))}"/>`).join('');
 
@@ -1086,8 +1107,7 @@ function renderHourly(data, s) {
     </div>`;
   }).join('');
 
-  $('#hourly').innerHTML = `
-    <div class="card-title">${t('hourly')} <span class="hr-legend">🌡️ <i class="lg-line"></i> ${getLang() === 'en' ? 'temp' : 'Temp.'} · 💧 <i class="lg-bar"></i> ${t('precipProb')}</span></div>
+  return `
     <div class="hr-scroll">
       <div class="hr-inner" style="width:${width}px">
         <div class="hr-cols">${cols}</div>
