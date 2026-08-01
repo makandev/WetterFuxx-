@@ -340,6 +340,26 @@ details.alert.upcoming .alert-ic { filter: grayscale(.25); }
 body[data-design="daylight"] .ask-pill.yes b, body[data-design="sand"] .ask-pill.yes b, body[data-design="mist"] .ask-pill.yes b { color: #2b6fd8; }
 body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.no b, body[data-design="mist"] .ask-pill.no b { color: #1f9d57; }
 
+/* ---- Frag den Fuchs (interactive) ---- */
+.fox-chat { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.fox-ava { flex: 0 0 auto; width: 52px; height: 52px; }
+.fox-ava svg { width: 100%; height: 100%; }
+.fox-bubble { position: relative; flex: 1; background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 14px; padding: 11px 13px; font-size: 14px; line-height: 1.45; min-height: 44px; }
+.fox-bubble b { font-weight: 700; }
+.fox-bubble.v-good { border-color: rgba(120,210,150,0.5); background: rgba(120,210,150,0.12); }
+.fox-bubble.v-ok { border-color: rgba(255,205,110,0.5); background: rgba(255,205,110,0.12); }
+.fox-bubble.v-bad { border-color: rgba(255,130,120,0.5); background: rgba(255,130,120,0.12); }
+.fox-bubble.v-info { border-color: rgba(120,170,255,0.5); background: rgba(120,170,255,0.12); }
+.fox-inputrow { display: flex; gap: 8px; margin-bottom: 10px; }
+.fox-inputrow input { flex: 1; min-width: 0; background: var(--card-bg-2); border: 1px solid var(--card-brd); border-radius: 12px; padding: 11px 13px; color: var(--text); font-size: 15px; font-family: inherit; outline: none; }
+.fox-inputrow input:focus { border-color: var(--accent); }
+.fox-inputrow input::placeholder { color: var(--text-faint); }
+.fox-inputrow button { flex: 0 0 auto; width: 46px; border: none; border-radius: 12px; background: var(--accent); color: #17263f; font-size: 18px; font-weight: 700; cursor: pointer; }
+.fox-inputrow button:active { transform: scale(0.95); }
+.fox-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.fox-chip { background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 999px; padding: 7px 12px; font-size: 13px; color: var(--text-dim); font-family: inherit; cursor: pointer; }
+.fox-chip:hover { color: var(--text); border-color: var(--card-brd); }
+
 /* ---- Weather moment of the day ---- */
 .moment { display: flex; align-items: center; gap: 14px; background: linear-gradient(150deg, rgba(255,200,120,0.22), rgba(255,150,90,0.12)); }
 .mom-emoji { font-size: 40px; flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0,0,0,.2)); }
