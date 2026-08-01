@@ -221,6 +221,10 @@ function refresh() {
 }
 
 // ---- Geolocation (opt-in, on demand) ----------------------------------------
+// The located spot is a TRANSIENT "current location": shown on the home screen
+// and refreshed only when the user taps 📍 (never tracked in the background).
+// It is NOT written to the saved list — saving stays optional via the ★ button.
+let geoPlace = null;
 let locating = false;
 async function tryGeolocation() {
   if (locating) return;
@@ -246,8 +250,8 @@ async function tryGeolocation() {
       try {
         const { latitude, longitude } = pos.coords;
         const place = await reversePlace(latitude, longitude, getLang());
-        addPlace(place);          // save it so it sticks as a chip
-        renderSavedChips();
+        geoPlace = place;         // transient current location (not saved)
+        renderSavedChips();       // show the "📍 Mein Standort" chip
         await selectPlace(place); // show the weather there
       } catch { showError(t('errGeneric')); }
       done();
@@ -266,7 +270,9 @@ async function tryGeolocation() {
         if (saved) selectPlace(saved, false); else { hideWelcome(); openSearch(); }
       }
     },
-    { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 },
+    // maximumAge kept short so a fresh tap actually notices you moved,
+    // without forcing a costly brand-new GPS lock every single time.
+    { enableHighAccuracy: false, timeout: 12000, maximumAge: 60000 },
   );
 }
 
@@ -325,15 +331,29 @@ function renderSavedChips() {
   const wrap = $('#savedChips');
   const places = loadPlaces();
   const emptyEl = $('#savedEmpty');
-  if (!places.length) { wrap.innerHTML = ''; emptyEl.hidden = false; emptyEl.textContent = t('noSaved'); return; }
+  // The transient current location gets its own chip: a 📍 pin instead of a
+  // flag, no × (it isn't saved), shown only while it isn't in the saved list.
+  const showGeo = geoPlace && !isSaved(geoPlace);
+  const geoChip = showGeo ? `
+    <div class="chip chip-geo${currentPlace && samePlace(geoPlace, currentPlace) ? ' active' : ''}" data-geo="1" role="button" tabindex="0" aria-label="${t('myLocation')}: ${escapeHtml(geoPlace.name)}">
+      <span class="chip-flag" aria-hidden="true">📍</span>
+      <span class="chip-name">${escapeHtml(geoPlace.name)}</span>
+    </div>` : '';
+  if (!places.length && !showGeo) { wrap.innerHTML = ''; emptyEl.hidden = false; emptyEl.textContent = t('noSaved'); return; }
   emptyEl.hidden = true;
-  wrap.innerHTML = places.map((p, i) => `
+  wrap.innerHTML = geoChip + places.map((p, i) => `
     <div class="chip${currentPlace && samePlace(p, currentPlace) ? ' active' : ''}" data-i="${i}" role="button" tabindex="0" aria-label="${escapeHtml(p.name)}">
       <span class="chip-flag" aria-hidden="true">${flagEmoji(p.country_code)}</span>
       <span class="chip-name">${escapeHtml(p.name)}</span>
       <button class="chip-x" data-del="${i}" title="${t('remove')}" aria-label="${t('remove')} ${escapeHtml(p.name)}">×</button>
     </div>`).join('');
-  wrap.querySelectorAll('.chip').forEach((chip) => {
+  const geoEl = wrap.querySelector('.chip-geo');
+  if (geoEl) {
+    const goGeo = () => selectPlace(geoPlace);
+    geoEl.addEventListener('click', goGeo);
+    geoEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goGeo(); } });
+  }
+  wrap.querySelectorAll('.chip:not(.chip-geo)').forEach((chip) => {
     const go = (e) => {
       if (e.target.classList.contains('chip-x')) return;
       selectPlace(places[+chip.dataset.i]);

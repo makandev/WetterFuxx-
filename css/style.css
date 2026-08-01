@@ -219,6 +219,9 @@ body[data-design="mist"] .set-row select option { color: #16324f; }
 }
 .chip:active { transform: scale(0.96); }
 .chip.active { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.4); }
+/* Transient "my location" chip — an accent tint sets it apart from saved places */
+.chip-geo { padding-right: 12px; border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 16%, var(--card-bg)); }
+.chip-geo.active { background: color-mix(in srgb, var(--accent) 30%, var(--card-bg)); border-color: var(--accent); }
 .chip-flag { font-size: 15px; }
 .chip-x { background: transparent; border: none; color: var(--text-faint); font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1; }
 .chip-x:hover { color: #fff; }
