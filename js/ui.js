@@ -70,6 +70,36 @@ function renderHero(data, s) {
   $('#heroFeels').textContent = `${t('feelsLike')} ${tempStr(c.apparent_temperature)}`;
   $('#heroHiLo').innerHTML =
     `<span class="hi">↑ ${tempStr(hi)}</span><span class="lo">↓ ${tempStr(lo)}</span>`;
+
+  // Wide-screen fill: detail cluster + a short hourly strip (hidden on phones
+  // via CSS, so the card stays slim there but uses the space on desktop).
+  const en = getLang() === 'en';
+  const u = s.units;
+  const h = data.forecast.hourly;
+  const wu = windUnitLabel(u.wind);
+  const uvv = day.uv_index_max ? (day.uv_index_max[0] || 0) : 0;
+  const ul = uvLevel(uvv);
+  const sr = day.sunrise ? day.sunrise[0] : null;
+  const ss = day.sunset ? day.sunset[0] : null;
+  const stat = (ic, lab, val) =>
+    `<div class="hstat"><span class="hs-ic" aria-hidden="true">${ic}</span><span class="hs-txt"><span class="hs-lab">${lab}</span><span class="hs-val">${val}</span></span></div>`;
+  $('#heroDetails').innerHTML =
+    stat('💨', 'Wind', `${num(c.wind_speed_10m)} ${wu}${c.wind_gusts_10m ? ` (${num(c.wind_gusts_10m)})` : ''}`)
+    + stat('💧', en ? 'Humidity' : 'Feuchte', c.relative_humidity_2m != null ? `${c.relative_humidity_2m} %` : '–')
+    + stat('☀️', 'UV', `${num(uvv)} · ${ul.label}`)
+    + stat('🌅', en ? 'Sun' : 'Sonne', `${sr ? formatTime(sr) : '–'} · ${ss ? formatTime(ss) : '–'}`);
+
+  const strip = $('#heroHours');
+  if (h && h.time) {
+    const start = currentHourIndex(h);
+    let out = '';
+    for (let i = start; i < Math.min(start + 6, h.time.length); i++) {
+      const dayH = h.is_day ? h.is_day[i] === 1 : true;
+      const label = i === start ? t('now') : formatHour(h.time[i]);
+      out += `<div class="hhr"><span class="hh-t">${label}</span><span class="hh-ic" aria-hidden="true">${weatherSVG(h.weather_code[i], dayH)}</span><span class="hh-d">${tempStr(h.temperature_2m[i])}</span></div>`;
+    }
+    strip.innerHTML = out;
+  } else { strip.innerHTML = ''; }
 }
 
 // ---- "Frag Wetterfux": simple at-a-glance Yes/No pills with icons ------------
@@ -1395,7 +1425,7 @@ function renderHourly(data, s) {
   if (inner == null) { $('#hourly').innerHTML = ''; return; }
   $('#hourly').innerHTML = `
     <div class="card-title has-hr">${t('hourly')} <span class="hr-legend">🌡️ <i class="lg-line"></i> ${getLang() === 'en' ? 'temp' : 'Temp.'} · 💧 <i class="lg-bar"></i> ${t('precipProb')}</span>
-      <button class="hr-expand" data-hr-expand title="${t('expand')}" aria-label="${t('expand')}">⤢</button>
+      <button class="hr-expand" data-hr-expand title="${t('expand')}" aria-label="${t('expand')}">⤢</button>${shareBtn('hourly')}
     </div>
     ${inner}`;
 }

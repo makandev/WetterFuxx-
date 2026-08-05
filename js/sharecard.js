@@ -568,6 +568,66 @@ export async function buildSunMoonBlob(data) {
   return toBlob(cv);
 }
 
+// Hourly — next 24 hours as a temperature curve with rain bars + icons.
+export async function buildHourlyBlob(data) {
+  const pal = prep(data);
+  const h = data.forecast.hourly;
+  const start = currentHourIndex(h);
+  const idx = [];
+  for (let i = start; i < Math.min(start + 24, h.time.length); i++) idx.push(i);
+  if (idx.length < 4) return buildSixHourBlob(data);
+  const en = getLang() === 'en';
+
+  const H = 1350;
+  const { cv, ctx } = createCard(H);
+  paintBg(ctx, pal, H);
+  header(ctx, { place: placeLabel(data.place), sub: en ? 'Next 24 hours' : 'Nächste 24 Stunden' });
+
+  const temps = idx.map((i) => h.temperature_2m[i]);
+  const tmin = Math.min(...temps), tmax = Math.max(...temps), range = Math.max(1, tmax - tmin);
+  const plotL = PAD, plotW = W - 2 * PAD;
+  const colX = (k) => plotL + (idx.length === 1 ? 0.5 : k / (idx.length - 1)) * plotW;
+  const curveTop = 330, curveH = 300, baseY = curveTop + curveH;
+  const yOf = (tp) => baseY - ((tp - tmin) / range) * (curveH - 90) - 45;
+  const pts = temps.map((tp, k) => [colX(k), yOf(tp)]);
+
+  // rain-probability bars (behind the curve)
+  const barBase = 900, barMax = 128, bw = (plotW / idx.length) * 0.62;
+  idx.forEach((i, k) => {
+    const prob = h.precipitation_probability ? (h.precipitation_probability[i] || 0) : 0;
+    if (prob < 5) return;
+    const bh = (prob / 100) * barMax;
+    roundRect(ctx, colX(k) - bw / 2, barBase - bh, bw, bh, 5);
+    ctx.fillStyle = 'rgba(120,170,255,0.5)'; ctx.fill();
+  });
+
+  // area + line
+  ctx.beginPath(); ctx.moveTo(pts[0][0], baseY);
+  pts.forEach(([x, y]) => ctx.lineTo(x, y));
+  ctx.lineTo(pts[pts.length - 1][0], baseY); ctx.closePath();
+  const fill = ctx.createLinearGradient(0, curveTop, 0, baseY);
+  fill.addColorStop(0, 'rgba(255,212,121,0.32)'); fill.addColorStop(1, 'rgba(255,212,121,0.02)');
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+  ctx.lineWidth = 5; ctx.strokeStyle = ACCENT; ctx.lineJoin = 'round'; ctx.stroke();
+
+  // every 3rd hour: temp label, weather icon, hour label
+  ctx.textAlign = 'center';
+  idx.forEach((i, k) => {
+    if (k % 3 !== 0 && k !== idx.length - 1) return;
+    const x = colX(k);
+    ctx.save(); shadowOn(ctx); ctx.fillStyle = '#fff'; ctx.font = FONT(700, 34);
+    ctx.fillText(tempStr(temps[k]), x, pts[k][1] - 22); ctx.restore();
+    const isDay = h.is_day ? h.is_day[i] === 1 : true;
+    emoji(ctx, ico(h.weather_code[i], isDay), x, 990, 58);
+    ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.82)'; ctx.font = FONT(600, 28);
+    ctx.fillText(k === 0 ? t('now') : formatHour(h.time[i]), x, 1052); ctx.restore();
+  });
+
+  footer(ctx, H, shareURL(data.place));
+  return toBlob(cv);
+}
+
 // Back-compat: the header share button still imports buildShareBlob.
 export const buildShareBlob = buildCurrentBlob;
 
@@ -576,6 +636,7 @@ export const SHARE_BUILDERS = {
   current: buildCurrentBlob,
   rain: buildRainBlob,
   six: buildSixHourBlob,
+  hourly: buildHourlyBlob,
   daily: buildDailyBlob,
   weekend: buildWeekendBlob,
   clothing: buildClothingBlob,
