@@ -398,9 +398,31 @@ body[data-design="daylight"] .ask-pill.no b, body[data-design="sand"] .ask-pill.
 
 /* Chat / Themen switch */
 .ai-seg { display: flex; gap: 4px; background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
-.ai-seg-btn { flex: 1; border: none; background: none; color: var(--text-dim); font-family: inherit; font-size: 13px; font-weight: 600; padding: 7px 6px; border-radius: 9px; cursor: pointer; }
+.ai-seg-btn { flex: 1; min-width: 0; border: none; background: none; color: var(--text-dim); font-family: inherit; font-size: 12.5px; font-weight: 600; padding: 7px 4px; border-radius: 9px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ai-seg-btn.on { background: var(--accent); color: #17263f; font-weight: 700; }
 body[data-design="midnight"] .ai-seg-btn.on, body[data-design="rose"] .ai-seg-btn.on, body[data-design="forest"] .ai-seg-btn.on { color: #14202e; }
+.ai-newtop-btn { background: none; border: none; font-size: 17px; cursor: pointer; opacity: .8; line-height: 1; margin-left: auto; }
+.ai-newtop-btn:hover { opacity: 1; }
+.askai .card-title > .ai-beta ~ .ai-key-btn { margin-left: 0; }
+
+/* Chats list */
+.ai-newchat { width: 100%; border: 1px dashed var(--card-brd); background: var(--card-bg-2); color: var(--text); font-family: inherit; font-size: 13.5px; font-weight: 600; padding: 10px; border-radius: 12px; cursor: pointer; margin-bottom: 10px; }
+.ai-newchat:hover { border-color: var(--accent); }
+.ai-chatlist { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
+.ai-chatrow { display: flex; align-items: stretch; gap: 6px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--card-bg-2); overflow: hidden; }
+.ai-chatrow.active { border-color: var(--accent); }
+.ai-chatopen { flex: 1; min-width: 0; text-align: left; background: none; border: none; padding: 9px 11px; cursor: pointer; font-family: inherit; display: flex; flex-direction: column; gap: 2px; }
+.ac-title { font-size: 13.5px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-snip { font-size: 12px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ai-chaticon { flex: 0 0 auto; background: none; border: none; border-left: 1px solid var(--hairline); color: var(--text-dim); font-size: 14px; width: 40px; cursor: pointer; }
+.ai-chaticon:hover { color: var(--text); background: var(--card-bg); }
+
+/* Staunen (wonder questions) */
+.ai-wonder-intro { font-size: 13px; color: var(--text-dim); margin: 0 0 12px; }
+.ai-wonder { display: flex; flex-direction: column; gap: 8px; }
+.ai-wonder-q { display: flex; align-items: center; gap: 11px; text-align: left; border: 1px solid var(--hairline); background: var(--card-bg-2); border-radius: 12px; padding: 11px 12px; color: var(--text); font-family: inherit; font-size: 13.5px; line-height: 1.4; cursor: pointer; }
+.ai-wonder-q:hover { border-color: var(--accent); }
+.ww-e { font-size: 22px; flex: 0 0 auto; }
 
 /* Themen (topic-grouped history) */
 .ai-themen { display: flex; flex-direction: column; }
