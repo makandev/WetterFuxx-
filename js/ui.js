@@ -6,7 +6,7 @@ import { buildClothingAdvice } from './advice.js';
 import { buildMoment } from './moment.js';
 import { foxSVG } from './mascot.js';
 import { mountRadar } from './radar.js';
-import { hasAIKey, hasAI, AI_PROXY, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat, AI_MODELS, loadAICfg, saveAICfg } from './ai.js';
+import { hasAIKey, hasAI, AI_PROXY, saveAIKey, clearAIKey, askFuxxAI, loadChat, saveChat, clearChat, AI_MODELS, loadAICfg, saveAICfg, listChats, newChat, switchChat, deleteChat, renameChat, allChatMsgs } from './ai.js';
 import {
   loadJournal, addJournalEntry, removeJournalEntry, clearJournal, exportJournal,
   loadProfiles, addProfile, removeProfile, getActiveProfile, setActiveProfile,
@@ -137,16 +137,46 @@ let aiHistory = loadChat(); // restored from this device so the chat persists
 let aiBusy = false;
 let aiError = '';
 let aiDraft = ''; // a failed question, put back into the box so it isn't lost
-let aiView = 'chat'; // 'chat' (live conversation) | 'themen' (grouped history)
+let aiView = 'chat'; // 'chat' | 'chats' | 'staunen' | 'themen'
 let aiCfgOpen = false; // KI settings panel (model + live-search) expanded?
+let aiPending = ''; // a question queued to auto-send after opening a fresh chat
 
-// Pair the flat history into question→answer entries (for the topic view).
-function aiPairs() {
+// Ten curated "wonder" questions — the kind that spark a little inner joy.
+const AI_WONDER = {
+  de: [
+    { e: '🌌', q: 'Warum ist der Himmel nachts schwarz, obwohl da Milliarden Sterne leuchten?' },
+    { e: '⛅', q: 'Wenn ich auf einer Wolke stehen könnte – wie schwer wäre sie eigentlich?' },
+    { e: '☀️', q: 'Wie alt ist das Sonnenlicht, das mich heute wärmt?' },
+    { e: '🌧️', q: 'Warum riecht es nach Regen, schon bevor der erste Tropfen fällt?' },
+    { e: '❄️', q: 'Warum ist wirklich kein Schneekristall wie das andere?' },
+    { e: '🌍', q: 'Wie schnell dreht sich die Erde gerade unter meinen Füßen?' },
+    { e: '✨', q: 'Warum funkeln Sterne, Planeten aber nicht?' },
+    { e: '🪐', q: 'Könnte es auf einem anderen Planeten regnen – und woraus?' },
+    { e: '🌈', q: 'Warum sieht jeder Mensch seinen ganz eigenen Regenbogen?' },
+    { e: '🌬️', q: 'Wohin geht der Wind eigentlich, wenn er sich legt?' },
+  ],
+  en: [
+    { e: '🌌', q: 'Why is the night sky black even though billions of stars are shining?' },
+    { e: '⛅', q: 'If I could stand on a cloud, how heavy would it actually be?' },
+    { e: '☀️', q: 'How old is the sunlight that is warming me today?' },
+    { e: '🌧️', q: 'Why does it smell like rain before the first drop even falls?' },
+    { e: '❄️', q: 'Why is truly no snowflake like any other?' },
+    { e: '🌍', q: 'How fast is the Earth spinning under my feet right now?' },
+    { e: '✨', q: 'Why do stars twinkle but planets don’t?' },
+    { e: '🪐', q: 'Could it rain on another planet — and out of what?' },
+    { e: '🌈', q: 'Why does every person see their very own rainbow?' },
+    { e: '🌬️', q: 'Where does the wind actually go when it dies down?' },
+  ],
+};
+
+// Pair a flat message list into question→answer entries (for the topic view).
+function aiPairs(msgs) {
+  const h = msgs || aiHistory;
   const pairs = [];
-  for (let i = 0; i < aiHistory.length; i++) {
-    if (aiHistory[i].role === 'user' && aiHistory[i + 1] && aiHistory[i + 1].role === 'ai') {
-      const a = aiHistory[i + 1];
-      pairs.push({ q: aiHistory[i].text, a: a.text, sources: a.sources, topic: a.topic || '' });
+  for (let i = 0; i < h.length; i++) {
+    if (h[i].role === 'user' && h[i + 1] && h[i + 1].role === 'ai') {
+      const a = h[i + 1];
+      pairs.push({ q: h[i].text, a: a.text, sources: a.sources, topic: a.topic || '' });
       i++;
     }
   }
@@ -160,9 +190,9 @@ function aiTLDR(text) {
   if (out.length > 96) out = out.slice(0, 94).trim() + '…';
   return out;
 }
-// B3: the history grouped by topic — a growing "knowledge log".
+// The Q&A across ALL chats, grouped by topic — a growing "knowledge log".
 function aiThemenHTML(en) {
-  const pairs = aiPairs();
+  const pairs = aiPairs(allChatMsgs());
   if (!pairs.length) return `<p class="ai-empty">${en ? 'Your questions collect here by topic.' : 'Hier sammeln sich deine Fragen nach Thema.'}</p>`;
   const groups = new Map();
   for (const p of pairs) {
@@ -181,6 +211,29 @@ function aiThemenHTML(en) {
     }
   }
   return html;
+}
+
+// "Chats": every saved conversation with open / rename / delete + new.
+function aiChatsHTML(en) {
+  const { active, chats } = listChats();
+  const rows = chats.map((c) => `
+    <div class="ai-chatrow${c.id === active ? ' active' : ''}">
+      <button class="ai-chatopen" data-cid="${c.id}">
+        <span class="ac-title">${escapeHtml(c.title || (en ? 'New chat' : 'Neuer Chat'))}</span>
+        <span class="ac-snip">${escapeHtml(aiTLDR(c.snippet) || (en ? 'empty' : 'leer'))}</span>
+      </button>
+      <button class="ai-chaticon ai-chatrename" data-cid="${c.id}" title="${en ? 'Rename' : 'Umbenennen'}" aria-label="${en ? 'Rename' : 'Umbenennen'}">✏️</button>
+      <button class="ai-chaticon ai-chatdel" data-cid="${c.id}" title="${en ? 'Delete' : 'Löschen'}" aria-label="${en ? 'Delete' : 'Löschen'}">🗑️</button>
+    </div>`).join('');
+  return `<button class="ai-newchat" id="aiNewChat">➕ ${en ? 'New chat' : 'Neuer Chat'}</button>
+    <div class="ai-chatlist">${rows || `<p class="ai-empty">${en ? 'No chats yet — ask something in the Chat tab.' : 'Noch keine Chats – frag etwas im Chat-Tab.'}</p>`}</div>`;
+}
+
+// "Staunen": ten wonder-questions; a tap opens a fresh chat and asks it.
+function aiStaunenHTML(en) {
+  const list = en ? AI_WONDER.en : AI_WONDER.de;
+  return `<p class="ai-wonder-intro">${en ? 'Tap a question — the Fuxx opens a new chat and answers it.' : 'Tippe eine Frage – der Fuxx öffnet einen neuen Chat und beantwortet sie.'}</p>
+    <div class="ai-wonder">${list.map((w, i) => `<button class="ai-wonder-q" data-wi="${i}"><span class="ww-e" aria-hidden="true">${w.e}</span><span>${escapeHtml(w.q)}</span></button>`).join('')}</div>`;
 }
 
 // Compact, factual snapshot of the app's own numbers — handed to the model so
@@ -295,16 +348,20 @@ function renderAskAI(data, s) {
       ${keyBlock}
     </div>` : '';
 
+  const panel = aiView === 'chats' ? aiChatsHTML(en)
+    : aiView === 'staunen' ? aiStaunenHTML(en)
+    : aiView === 'themen' ? themenPanel
+    : chatPanel;
+  const seg = (v, icon, label) => `<button class="ai-seg-btn ${aiView === v ? 'on' : ''}" data-view="${v}">${icon} ${label}</button>`;
   box.innerHTML = `
     <div class="card-title">🤖 ${en ? 'Ask the Fuxx — AI' : 'Frag den Fuxx – KI'} <span class="ai-beta">Beta</span>
-      ${aiHistory.length ? `<button class="ai-new-btn" aria-label="${en ? 'New conversation' : 'Neues Gespräch'}" title="${en ? 'New conversation' : 'Neues Gespräch'}">🗑️</button>` : ''}
+      <button class="ai-newtop-btn" id="aiNewTop" aria-label="${en ? 'New chat' : 'Neuer Chat'}" title="${en ? 'New chat' : 'Neuer Chat'}">➕</button>
       <button class="ai-key-btn ${aiCfgOpen ? 'on' : ''}" aria-label="${en ? 'AI settings' : 'KI-Einstellungen'}" title="${en ? 'Settings' : 'Einstellungen'}" aria-expanded="${aiCfgOpen}">⚙️</button></div>
     ${cfgPanel}
     <div class="ai-seg" role="tablist">
-      <button class="ai-seg-btn ${aiView === 'chat' ? 'on' : ''}" data-view="chat">💬 Chat</button>
-      <button class="ai-seg-btn ${aiView === 'themen' ? 'on' : ''}" data-view="themen">📚 ${en ? 'Topics' : 'Themen'}</button>
+      ${seg('chat', '💬', 'Chat')}${seg('chats', '🗂️', 'Chats')}${seg('staunen', '✨', en ? 'Wonder' : 'Staunen')}${seg('themen', '📚', en ? 'Topics' : 'Themen')}
     </div>
-    ${aiView === 'chat' ? chatPanel : themenPanel}`;
+    ${panel}`;
 
   box.querySelectorAll('.ai-seg-btn').forEach((b) => b.addEventListener('click', () => {
     const v = b.dataset.view;
@@ -317,8 +374,8 @@ function renderAskAI(data, s) {
   if (groundChk) groundChk.addEventListener('change', () => { saveAICfg({ grounding: groundChk.checked }); });
   const keyRemove = box.querySelector('#aiKeyRemove');
   if (keyRemove) keyRemove.addEventListener('click', () => {
-    const msg = en ? 'Remove your API key from this device?' : 'Deinen API-Schlüssel von diesem Gerät entfernen?';
-    if (window.confirm(msg)) { clearAIKey(); aiHistory = []; aiError = ''; aiView = 'chat'; aiCfgOpen = false; clearChat(); renderAskAI(data, s); }
+    const msg = en ? 'Remove your API key from this device? Your chats stay.' : 'Deinen API-Schlüssel von diesem Gerät entfernen? Deine Chats bleiben.';
+    if (window.confirm(msg)) { clearAIKey(); aiError = ''; aiCfgOpen = false; renderAskAI(data, s); }
   });
   // Optional "use my own key" inside settings (proxy mode).
   const ownKeyInp = box.querySelector('#aiKey');
@@ -369,11 +426,35 @@ function renderAskAI(data, s) {
     if (!aiBusy) inp.focus({ preventScroll: true });
   }
   box.querySelectorAll('.ai-chip').forEach((c) => c.addEventListener('click', () => send(c.textContent)));
-  const newBtn = box.querySelector('.ai-new-btn');
-  if (newBtn) newBtn.addEventListener('click', () => {
-    const msg = en ? 'Start a new conversation? This clears the current chat.' : 'Neues Gespräch starten? Der aktuelle Chat wird gelöscht.';
-    if (window.confirm(msg)) { aiHistory = []; aiError = ''; aiView = 'chat'; clearChat(); renderAskAI(data, s); }
-  });
+
+  const startNewChat = () => { newChat(); aiHistory = []; aiError = ''; aiDraft = ''; aiView = 'chat'; renderAskAI(data, s); };
+  const ntBtn = box.querySelector('#aiNewTop'); if (ntBtn) ntBtn.addEventListener('click', startNewChat);
+  const ncBtn = box.querySelector('#aiNewChat'); if (ncBtn) ncBtn.addEventListener('click', startNewChat);
+
+  // Chats list: open / rename / delete
+  box.querySelectorAll('.ai-chatopen').forEach((b) => b.addEventListener('click', () => {
+    switchChat(b.dataset.cid); aiHistory = loadChat(); aiError = ''; aiView = 'chat'; renderAskAI(data, s);
+  }));
+  box.querySelectorAll('.ai-chatrename').forEach((b) => b.addEventListener('click', () => {
+    const cur = b.closest('.ai-chatrow').querySelector('.ac-title').textContent;
+    const t = window.prompt(en ? 'Rename chat:' : 'Chat umbenennen:', cur);
+    if (t != null) { renameChat(b.dataset.cid, t); renderAskAI(data, s); }
+  }));
+  box.querySelectorAll('.ai-chatdel').forEach((b) => b.addEventListener('click', () => {
+    if (window.confirm(en ? 'Delete this chat?' : 'Diesen Chat löschen?')) {
+      deleteChat(b.dataset.cid); aiHistory = loadChat(); renderAskAI(data, s);
+    }
+  }));
+
+  // Staunen: a tap opens a fresh chat and auto-asks the wonder question
+  box.querySelectorAll('.ai-wonder-q').forEach((b) => b.addEventListener('click', () => {
+    const w = (en ? AI_WONDER.en : AI_WONDER.de)[+b.dataset.wi];
+    if (!w) return;
+    newChat(); aiHistory = []; aiError = ''; aiView = 'chat'; aiPending = w.q; renderAskAI(data, s);
+  }));
+
+  // Auto-send a queued (wonder) question once the chat view is live.
+  if (aiView === 'chat' && aiPending && !aiBusy) { const q = aiPending; aiPending = ''; send(q); }
 }
 
 // ---- Weather moment of the day ----------------------------------------------
