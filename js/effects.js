@@ -1,20 +1,39 @@
 // effects.js — canvas particle backgrounds driven by weather + time of day
 
 let canvas, ctx, raf, particles = [], mode = 'clear', isDay = true, flashT = 0;
-let W = 0, H = 0, dpr = 1;
+let W = 0, H = 0, dpr = 1, lastW = 0, lastH = 0, resizeTimer = 0, paused = false;
 
 export function initEffects(canvasEl) {
   canvas = canvasEl;
   ctx = canvas.getContext('2d');
-  resize();
-  window.addEventListener('resize', resize, { passive: true });
+  resize(true);
+  // IMPORTANT (mobile): on a phone the browser's address bar hides/shows while
+  // you scroll. That fires `resize` constantly and only changes the HEIGHT.
+  // Rebuilding this full-screen canvas on every one of those events churned GPU
+  // memory hard enough that the mobile browser reloaded the tab (scroll jumped
+  // back to the top every few seconds). So we debounce, and only truly re-init
+  // on a WIDTH change or a big height jump (orientation) — the address-bar
+  // wiggle is ignored (the fixed canvas just stretches its bitmap, unnoticeable).
+  window.addEventListener('resize', () => {
+    if (resizeTimer) return;
+    resizeTimer = setTimeout(() => { resizeTimer = 0; resize(false); }, 200);
+  }, { passive: true });
+  // Don't animate a hidden tab — saves battery and memory.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { if (raf) { cancelAnimationFrame(raf); raf = 0; paused = true; } }
+    else if (paused) { paused = false; loop(); }
+  });
 }
 
-function resize() {
+function resize(force) {
   if (!canvas) return;
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
-  W = canvas.clientWidth; H = canvas.clientHeight;
-  canvas.width = W * dpr; canvas.height = H * dpr;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  // Skip the address-bar's height-only wiggle; keep the existing bitmap.
+  if (!force && w === lastW && Math.abs(h - lastH) < 150) return;
+  lastW = w; lastH = h;
+  dpr = Math.min(window.devicePixelRatio || 1, 1.5); // decorative bg — 1.5 is plenty
+  W = w; H = h;
+  canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   buildParticles();
 }

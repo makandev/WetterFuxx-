@@ -1,5 +1,5 @@
 /* Wetterfux service worker — offline app shell + fresh weather data */
-const CACHE = 'wetterfux-v50';
+const CACHE = 'wetterfux-v51';
 const SHELL = [
   './',
   './index.html',
@@ -31,10 +31,11 @@ const SHELL = [
 
 self.addEventListener('install', (e) => {
   // Cache each asset independently so one 404 can't fail the whole install.
-  // Do NOT skipWaiting() here: the new worker must WAIT until the user accepts
-  // the update via the banner (which posts 'SKIP_WAITING'). Auto-activating
-  // every new worker AND reloading the page on controllerchange produced a
-  // reload loop that threw the user back to the top of the page.
+  // Activate straight away so fixes actually reach users still running an old
+  // worker. This is safe from the old reload-loop because the client only
+  // reloads on an explicit user "update" tap now (see registerSW in app.js) —
+  // never automatically on controllerchange.
+  self.skipWaiting();
   e.waitUntil(caches.open(CACHE).then((c) => Promise.allSettled(SHELL.map((u) => c.add(u)))));
 });
 
