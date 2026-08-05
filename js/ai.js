@@ -64,21 +64,90 @@ export function hasAIKey() { return !!loadAIKey(); }
 export function hasAI() { return !!AI_PROXY || hasAIKey(); }
 
 // ---- Conversation memory (local only) ---------------------------------------
-// The chat is kept on this device so follow-ups ("and why?", "and tomorrow?")
-// and the history survive a reload. Nothing is uploaded except to Gemini at
-// ask time. We keep the last CHAT_MAX messages.
-const CHAT_STORE = 'wf.ai.chat.v1';
-const CHAT_MAX = 24;
-export function loadChat() {
-  try { const a = JSON.parse(localStorage.getItem(CHAT_STORE) || '[]'); return Array.isArray(a) ? a : []; }
-  catch { return []; }
+// Multiple named chats are kept on this device so follow-ups and history survive
+// a reload. Nothing is uploaded except to Gemini at ask time. Shape:
+//   { active: <id|null>, list: [ { id, title, updated, msgs:[{role,text,...}] } ] }
+const CHATS_STORE = 'wf.ai.chats.v1';
+const OLD_CHAT_STORE = 'wf.ai.chat.v1'; // pre-multi-chat single conversation
+const CHAT_MAX = 40;   // messages kept per chat
+const CHATS_MAX = 40;  // chats kept
+
+let idSeq = 0;
+const newId = () => 'c' + Date.now().toString(36) + (idSeq++).toString(36);
+const titleFrom = (msgs) => {
+  const u = (msgs || []).find((m) => m.role === 'user');
+  return u ? u.text.replace(/\s+/g, ' ').trim().slice(0, 44) : '';
+};
+
+function readChats() {
+  try {
+    const raw = localStorage.getItem(CHATS_STORE);
+    if (raw) { const s = JSON.parse(raw); if (s && Array.isArray(s.list)) return s; }
+  } catch { /* fall through to migration */ }
+  // Migrate the old single conversation into a first chat.
+  try {
+    const old = JSON.parse(localStorage.getItem(OLD_CHAT_STORE) || '[]');
+    if (Array.isArray(old) && old.length) {
+      const c = { id: newId(), title: titleFrom(old), updated: Date.now(), msgs: old.slice(-CHAT_MAX) };
+      const s = { active: c.id, list: [c] };
+      saveChatsState(s);
+      try { localStorage.removeItem(OLD_CHAT_STORE); } catch { /* ignore */ }
+      return s;
+    }
+  } catch { /* ignore */ }
+  return { active: null, list: [] };
 }
-export function saveChat(history) {
-  try { localStorage.setItem(CHAT_STORE, JSON.stringify((history || []).slice(-CHAT_MAX))); } catch { /* private mode */ }
+function saveChatsState(s) {
+  try {
+    const list = (s.list || []).slice().sort((a, b) => (b.updated || 0) - (a.updated || 0)).slice(0, CHATS_MAX);
+    for (const c of list) c.msgs = (c.msgs || []).slice(-CHAT_MAX);
+    localStorage.setItem(CHATS_STORE, JSON.stringify({ active: s.active, list }));
+  } catch { /* private mode */ }
 }
-export function clearChat() {
-  try { localStorage.removeItem(CHAT_STORE); } catch { /* private mode */ }
+const activeChat = (s) => s.list.find((c) => c.id === s.active) || null;
+
+// ---- Active-chat helpers (used by the live chat view) ----
+export function loadChat() { const c = activeChat(readChats()); return c ? c.msgs.slice() : []; }
+export function saveChat(msgs) {
+  const s = readChats();
+  let c = activeChat(s);
+  if (!c) { c = { id: newId(), title: '', updated: Date.now(), msgs: [] }; s.list.unshift(c); s.active = c.id; }
+  c.msgs = (msgs || []).slice(-CHAT_MAX);
+  c.updated = Date.now();
+  if (!c.title) c.title = titleFrom(c.msgs);
+  saveChatsState(s);
 }
+export function clearChat() { // empty the ACTIVE chat (keeps it in the list)
+  const s = readChats(); const c = activeChat(s);
+  if (c) { c.msgs = []; c.title = ''; c.updated = Date.now(); saveChatsState(s); }
+}
+
+// ---- Multi-chat management ----
+export function listChats() {
+  const s = readChats();
+  const chats = s.list.slice().sort((a, b) => (b.updated || 0) - (a.updated || 0))
+    .map((c) => ({ id: c.id, title: c.title || titleFrom(c.msgs) || '', count: c.msgs.length, updated: c.updated,
+      snippet: (c.msgs.find((m) => m.role === 'ai') || {}).text || '' }));
+  return { active: s.active, chats };
+}
+export function newChat() {
+  const s = readChats();
+  const c = { id: newId(), title: '', updated: Date.now(), msgs: [] };
+  s.list.unshift(c); s.active = c.id; saveChatsState(s); return c.id;
+}
+export function switchChat(id) { const s = readChats(); if (s.list.some((c) => c.id === id)) { s.active = id; saveChatsState(s); } }
+export function deleteChat(id) {
+  const s = readChats();
+  s.list = s.list.filter((c) => c.id !== id);
+  if (s.active === id) s.active = s.list[0] ? s.list[0].id : null;
+  saveChatsState(s);
+}
+export function renameChat(id, title) {
+  const s = readChats(); const c = s.list.find((x) => x.id === id);
+  if (c) { c.title = (title || '').replace(/\s+/g, ' ').trim().slice(0, 60); saveChatsState(s); }
+}
+// All Q&A pairs across every chat (for the topic view).
+export function allChatMsgs() { return readChats().list.flatMap((c) => c.msgs); }
 
 function systemPrompt(lang) {
   const de = lang !== 'en';
