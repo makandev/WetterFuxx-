@@ -321,6 +321,23 @@ details.alert.upcoming .alert-ic { filter: grayscale(.25); }
 .hero { display: flex; align-items: center; gap: 8px; padding: 22px 20px; flex-wrap: wrap; }
 /* Wide-screen hero fill (details + hourly strip) — hidden on phones */
 .hero-details, .hero-hours-strip { display: none; }
+/* Phone hero fill: a compact detail row (icon + value) that uses the empty
+   space in the big card. Wraps gracefully so it fits every screen — one line
+   on normal phones, two rows on very narrow ones. Labels are dropped (the icon
+   carries the meaning) to stay slim. The hourly strip stays desktop-only. */
+@media (max-width: 899.98px) {
+  .hero-details {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px;
+    flex-basis: 100%; width: 100%;
+    margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid var(--hairline);
+  }
+  .hero-details .hstat { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .hero-details .hs-ic { font-size: 15px; }
+  .hero-details .hs-txt { display: flex; flex-direction: row; align-items: baseline; gap: 4px; min-width: 0; }
+  .hero-details .hs-lab { display: none; }
+  .hero-details .hs-val { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+}
 @media (min-width: 900px) {
   .hero-details { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-left: auto; }
   .hstat { display: flex; align-items: center; gap: 9px; background: var(--card-bg-2); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; min-width: 158px; }
