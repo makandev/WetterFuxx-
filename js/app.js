@@ -965,6 +965,12 @@ function wirePullToRefresh() {
 // ---- Service worker with controlled update ----------------------------------
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
+  // Reload ONLY after the user explicitly accepts an update. Auto-reloading on
+  // every `controllerchange` caused the page to reload itself in a loop (each
+  // new worker that took control yanked the user back to the top every few
+  // seconds — e.g. while the CDN briefly served two sw.js versions after a
+  // deploy). The new worker now waits until the banner is tapped.
+  let updateAccepted = false;
   window.addEventListener('load', async () => {
     try {
       const reg = await navigator.serviceWorker.register('./sw.js');
@@ -975,13 +981,20 @@ function registerSW() {
           if (nw.state === 'installed' && navigator.serviceWorker.controller) {
             const banner = $('#updateBanner');
             banner.hidden = false;
-            banner.onclick = () => { banner.hidden = true; nw.postMessage('SKIP_WAITING'); };
+            banner.onclick = () => {
+              banner.hidden = true;
+              updateAccepted = true;       // a reload is now expected & wanted
+              nw.postMessage('SKIP_WAITING');
+            };
           }
         });
       });
       let refreshed = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshed) return; refreshed = true; location.reload();
+        // Never reload on our own — only once the user tapped "update".
+        if (!updateAccepted || refreshed) return;
+        refreshed = true;
+        location.reload();
       });
     } catch { /* SW optional */ }
   });
