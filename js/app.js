@@ -80,7 +80,16 @@ function wireTabs() {
       setActiveTab(Math.round(pager.scrollLeft / pager.clientWidth));
     });
   }, { passive: true });
-  window.addEventListener('resize', () => { pager.scrollLeft = activeTab * pager.clientWidth; scheduleMasonry(); });
+  window.addEventListener('resize', () => {
+    pager.scrollLeft = activeTab * pager.clientWidth;
+    // Only relayout the masonry on a real WIDTH change. On phones the address
+    // bar hides/shows while scrolling and fires `resize` with ONLY a height
+    // change; rebuilding the masonry there tore every widget down and back up
+    // on every scroll — the visible "soft reload" of the cards in desktop-width
+    // mode. Height-only resizes are now ignored for layout.
+    const w = window.innerWidth;
+    if (w !== lastLayoutWidth) { lastLayoutWidth = w; scheduleMasonry(); }
+  });
 }
 function setActiveTab(i) {
   if (i < 0 || i > 4 || i === activeTab) return;
@@ -100,6 +109,7 @@ function setActiveTab(i) {
 const MASONRY_IDS = ['streakCard', 'ask', 'moment', 'clothing', 'nowcast', 'sixhour',
   'daily', 'details', 'activity', 'activities', 'airbio', 'sunmoon', 'worldwx'];
 let masonryRAF = 0;
+let lastLayoutWidth = (typeof window !== 'undefined') ? window.innerWidth : 0;
 function applyMasonry() {
   const page = document.getElementById('page-today');
   if (!page) return;
